@@ -1,0 +1,133 @@
+:root {
+  --tinta: #1c1f24;
+  --suave: #6b7280;
+  --linea: #e3e6ea;
+  --fondo: #f6f7f9;
+  --acento: #2563eb;
+  --peligro: #b42318;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--tinta);
+  background: var(--fondo);
+}
+
+.contenedor {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+}
+
+header h1 {
+  font-size: 22px;
+  margin: 0 0 12px;
+}
+
+nav { display: flex; gap: 8px; margin-bottom: 24px; }
+
+nav button {
+  background: transparent;
+  border: 1px solid var(--linea);
+  border-radius: 999px;
+  padding: 6px 16px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+nav button.activo {
+  background: var(--tinta);
+  border-color: var(--tinta);
+  color: #fff;
+}
+
+h2 { font-size: 17px; margin: 0 0 12px; }
+
+.tarjeta {
+  background: #fff;
+  border: 1px solid var(--linea);
+  border-radius: 10px;
+  padding: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+input, select {
+  border: 1px solid var(--linea);
+  border-radius: 7px;
+  padding: 8px 10px;
+  font-size: 14px;
+  font-family: inherit;
+  min-width: 140px;
+  flex: 1;
+}
+
+button[type="submit"] {
+  background: var(--acento);
+  color: #fff;
+  border: none;
+  border-radius: 7px;
+  padding: 8px 18px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.barra { margin-bottom: 12px; font-size: 14px; color: var(--suave); }
+.barra select { min-width: 0; flex: none; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border: 1px solid var(--linea);
+  border-radius: 10px;
+  overflow: hidden;
+  font-size: 14px;
+}
+
+th, td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--linea);
+}
+
+th {
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--suave);
+  background: #fafbfc;
+}
+
+tbody tr:last-child td { border-bottom: none; }
+
+.derecha { text-align: right; }
+
+.peligro {
+  background: transparent;
+  border: 1px solid var(--linea);
+  color: var(--peligro);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.error {
+  background: #fff1f0;
+  border: 1px solid #ffccc7;
+  color: var(--peligro);
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+@media (max-width: 640px) {
+  table { display: block; overflow-x: auto; }
+}
