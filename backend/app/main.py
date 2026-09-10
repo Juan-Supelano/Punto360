@@ -1,36 +1,34 @@
-from contextlib import asynccontextmanager
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.database import Base, engine
-from app.models import Categoria, Producto  # noqa: F401  (registra las tablas)
-from app.routers import categorias, productos
+from app.config import settings
+from app.models import Categoria, Comercio, Producto, Usuario  # noqa: F401
+from app.routers import auth, categorias, productos
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Crea las tablas si no existen. Mas adelante esto lo reemplaza Alembic.
-    Base.metadata.create_all(bind=engine)
-    yield
-
+# Ojo: aqui NO se llama Base.metadata.create_all().
+# El esquema de proyecto_nube lo administra el script SQL del equipo (y mas
+# adelante Alembic). Si el codigo tambien creara tablas, terminarian existiendo
+# dos versiones distintas del mismo modelo y los errores serian silenciosos.
 
 app = FastAPI(
     title="Cuadre POS API",
-    description="API REST del punto de venta. Actividad integradora.",
-    version="0.1.0",
-    lifespan=lifespan,
+    description=(
+        "API REST del punto de venta. Actividad integradora.\n\n"
+        "Casi todos los endpoints piden token: primero llama a "
+        "`POST /auth/login` y pega el `access_token` en el boton **Authorize**."
+    ),
+    version="0.2.0",
 )
 
-# Permite que el frontend (otro puerto) pueda llamar a esta API.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=settings.lista_cors,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
 app.include_router(categorias.router)
 app.include_router(productos.router)
 
@@ -42,4 +40,5 @@ def raiz():
 
 @app.get("/salud", tags=["Estado"])
 def salud():
+    """Endpoint para el health check de Cloud Run."""
     return {"estado": "ok"}

@@ -1,0 +1,226 @@
+BASE DE DATOS: proyecto_nube
+SEARCH_PATH  : "$user", public
+ESQUEMAS     : pg_toast, public
+
+########## ESQUEMA public ##########
+
+===== caja_sesion  (0 filas) =====
+  id                           INTEGER                      NOT NULL  default=nextval('"public".caja_sesion_id_seq'::regclass)
+  usuario_id                   INTEGER                      NULL
+  abierta_en                   TIMESTAMP                    NOT NULL  default=now()
+  cerrada_en                   TIMESTAMP                    NULL
+  base_inicial                 NUMERIC(12, 2)               NOT NULL  default=0
+  total_esperado               NUMERIC(12, 2)               NULL
+  total_contado                NUMERIC(12, 2)               NULL
+  diferencia                   NUMERIC(12, 2)               NULL
+  estado                       VARCHAR(10)                  NOT NULL  default='ABIERTA'::character varying
+  observaciones                TEXT                         NULL
+  PK: id
+  FK: usuario_id -> usuario.id
+  CHECK: base_inicial >= 0::numeric
+  CHECK: estado::text = ANY (ARRAY['ABIERTA'::character varying, 'CERRADA'::character varying]::text[])
+  INDEX: uq_caja_una_abierta (estado)
+
+===== categoria  (5 filas) =====
+  id                           INTEGER                      NOT NULL  default=nextval('"public".categoria_id_seq'::regclass)
+  nombre                       VARCHAR(80)                  NOT NULL
+  descripcion                  TEXT                         NULL
+  activo                       BOOLEAN                      NOT NULL  default=true
+  creado_en                    TIMESTAMP                    NOT NULL  default=now()
+  PK: id
+  UNIQUE: nombre
+  CHECK: length(TRIM(BOTH FROM nombre)) > 0
+  INDEX: categoria_nombre_key (nombre)
+
+===== cliente  (6 filas) =====
+  id                           INTEGER                      NOT NULL  default=nextval('"public".cliente_id_seq'::regclass)
+  tipo_doc                     VARCHAR(5)                   NOT NULL  default='CC'::character varying
+  num_doc                      VARCHAR(20)                  NOT NULL
+  nombre                       VARCHAR(150)                 NOT NULL
+  email                        VARCHAR(120)                 NULL
+  telefono                     VARCHAR(30)                  NULL
+  direccion                    VARCHAR(200)                 NULL
+  activo                       BOOLEAN                      NOT NULL  default=true
+  creado_en                    TIMESTAMP                    NOT NULL  default=now()
+  PK: id
+  UNIQUE: num_doc
+  CHECK: tipo_doc::text = ANY (ARRAY['CC'::character varying, 'NIT'::character varying, 'CE'::character varying, 'TI'::character varying, 'PAS'::character varying]::text[])
+  INDEX: cliente_num_doc_key (num_doc)
+  INDEX: idx_cliente_nombre (?)
+
+===== compra  (0 filas) =====
+  id                           INTEGER                      NOT NULL  default=nextval('"public".compra_id_seq'::regclass)
+  proveedor_id                 INTEGER                      NOT NULL
+  numero_factura               VARCHAR(40)                  NOT NULL
+  fecha                        TIMESTAMP                    NOT NULL  default=now()
+  subtotal                     NUMERIC(12, 2)               NOT NULL  default=0
+  total_iva                    NUMERIC(12, 2)               NOT NULL  default=0
+  total                        NUMERIC(12, 2)               NOT NULL  default=0
+  estado                       VARCHAR(10)                  NOT NULL  default='RECIBIDA'::character varying
+  creado_en                    TIMESTAMP                    NOT NULL  default=now()
+  PK: id
+  FK: proveedor_id -> proveedor.id
+  UNIQUE: proveedor_id, numero_factura
+  CHECK: estado::text = ANY (ARRAY['RECIBIDA'::character varying, 'ANULADA'::character varying]::text[])
+  INDEX: idx_compra_fecha (fecha)
+  INDEX: uq_compra_proveedor_factura (proveedor_id, numero_factura)
+
+===== compra_item  (0 filas) =====
+  id                           INTEGER                      NOT NULL  default=nextval('"public".compra_item_id_seq'::regclass)
+  compra_id                    INTEGER                      NOT NULL
+  producto_id                  INTEGER                      NOT NULL
+  cantidad                     NUMERIC(10, 3)               NOT NULL
+  costo_unitario               NUMERIC(12, 2)               NOT NULL
+  subtotal_linea               NUMERIC(12, 2)               NOT NULL
+  PK: id
+  FK: compra_id -> compra.id
+  FK: producto_id -> producto.id
+  CHECK: cantidad > 0::numeric
+  CHECK: costo_unitario >= 0::numeric
+  INDEX: idx_compra_item_compra (compra_id)
+
+===== configuracion_comercio  (1 filas) =====
+  id                           INTEGER                      NOT NULL  default=nextval('"public".configuracion_comercio_id_seq'::regclass)
+  razon_social                 VARCHAR(150)                 NOT NULL
+  nit                          VARCHAR(20)                  NOT NULL
+  direccion                    VARCHAR(200)                 NULL
+  telefono                     VARCHAR(30)                  NULL
+  prefijo_factura              VARCHAR(5)                   NOT NULL  default='F'::character varying
+  resolucion_dian              VARCHAR(60)                  NULL
+  regimen                      VARCHAR(30)                  NOT NULL  default='NO RESPONSABLE DE IVA'::character varying
+  actualizado_en               TIMESTAMP                    NOT NULL  default=now()
+  PK: id
+  CHECK: id = 1
+
+===== movimiento_inventario  (0 filas) =====
+  id                           INTEGER                      NOT NULL  default=nextval('"public".movimiento_inventario_id_seq'::regclass)
+  producto_id                  INTEGER                      NOT NULL
+  tipo                         VARCHAR(12)                  NOT NULL
+  cantidad                     NUMERIC(10, 3)               NOT NULL
+  stock_anterior               INTEGER                      NOT NULL
+  stock_resultante             INTEGER                      NOT NULL
+  venta_id                     INTEGER                      NULL
+  usuario_id                   INTEGER                      NULL
+  motivo                       VARCHAR(200)                 NULL
+  fecha                        TIMESTAMP                    NOT NULL  default=now()
+  PK: id
+  FK: producto_id -> producto.id
+  FK: usuario_id -> usuario.id
+  FK: venta_id -> venta.id
+  CHECK: cantidad > 0::numeric
+  CHECK: stock_resultante >= 0
+  CHECK: tipo::text = ANY (ARRAY['ENTRADA'::character varying, 'SALIDA'::character varying, 'VENTA'::character varying, 'ANULACION'::character varying, 'AJUSTE'::character varying, 'COMPRA'::character varying]::text[])
+  INDEX: idx_mov_producto_fecha (producto_id, fecha)
+  INDEX: idx_mov_venta (venta_id)
+
+===== producto  (30 filas) =====
+  id                           INTEGER                      NOT NULL  default=nextval('"public".producto_id_seq'::regclass)
+  categoria_id                 INTEGER                      NOT NULL
+  sku                          VARCHAR(40)                  NOT NULL
+  nombre                       VARCHAR(150)                 NOT NULL
+  descripcion                  TEXT                         NULL
+  precio_venta                 NUMERIC(12, 2)               NOT NULL
+  costo                        NUMERIC(12, 2)               NOT NULL  default=0
+  iva_pct                      NUMERIC(5, 2)                NOT NULL  default=19.00
+  stock_actual                 INTEGER                      NOT NULL  default=0
+  stock_minimo                 INTEGER                      NOT NULL  default=0
+  unidad_medida                VARCHAR(15)                  NOT NULL  default='UND'::character varying
+  activo                       BOOLEAN                      NOT NULL  default=true
+  creado_en                    TIMESTAMP                    NOT NULL  default=now()
+  actualizado_en               TIMESTAMP                    NOT NULL  default=now()
+  PK: id
+  FK: categoria_id -> categoria.id
+  UNIQUE: sku
+  CHECK: costo >= 0::numeric
+  CHECK: iva_pct >= 0::numeric AND iva_pct <= 100::numeric
+  CHECK: precio_venta >= 0::numeric
+  CHECK: stock_actual >= 0
+  CHECK: stock_minimo >= 0
+  CHECK: unidad_medida::text = ANY (ARRAY['UND'::character varying, 'KG'::character varying, 'LT'::character varying, 'MT'::character varying, 'CAJA'::character varying, 'PAQ'::character varying]::text[])
+  INDEX: idx_producto_activo (activo)
+  INDEX: idx_producto_categoria (categoria_id)
+  INDEX: idx_producto_nombre (?)
+  INDEX: producto_sku_key (sku)
+
+===== proveedor  (3 filas) =====
+  id                           INTEGER                      NOT NULL  default=nextval('"public".proveedor_id_seq'::regclass)
+  nit                          VARCHAR(20)                  NOT NULL
+  nombre                       VARCHAR(150)                 NOT NULL
+  contacto                     VARCHAR(120)                 NULL
+  telefono                     VARCHAR(30)                  NULL
+  email                        VARCHAR(120)                 NULL
+  activo                       BOOLEAN                      NOT NULL  default=true
+  creado_en                    TIMESTAMP                    NOT NULL  default=now()
+  PK: id
+  UNIQUE: nit
+  INDEX: proveedor_nit_key (nit)
+
+===== usuario  (2 filas) =====
+  id                           INTEGER                      NOT NULL  default=nextval('"public".usuario_id_seq'::regclass)
+  email                        VARCHAR(120)                 NOT NULL
+  nombre                       VARCHAR(120)                 NOT NULL
+  password_hash                VARCHAR(255)                 NOT NULL
+  rol                          VARCHAR(10)                  NOT NULL  default='CAJERO'::character varying
+  activo                       BOOLEAN                      NOT NULL  default=true
+  creado_en                    TIMESTAMP                    NOT NULL  default=now()
+  ultimo_acceso                TIMESTAMP                    NULL
+  PK: id
+  UNIQUE: email
+  CHECK: rol::text = ANY (ARRAY['ADMIN'::character varying, 'CAJERO'::character varying]::text[])
+  INDEX: usuario_email_key (email)
+
+===== venta  (0 filas) =====
+  id                           INTEGER                      NOT NULL  default=nextval('"public".venta_id_seq'::regclass)
+  numero                       VARCHAR(20)                  NOT NULL  default=nextval('"public".venta_numero_seq'::regclass))::text, 6, '0'::text))
+  cliente_id                   INTEGER                      NULL
+  fecha                        TIMESTAMP                    NOT NULL  default=now()
+  subtotal                     NUMERIC(12, 2)               NOT NULL  default=0
+  total_iva                    NUMERIC(12, 2)               NOT NULL  default=0
+  total                        NUMERIC(12, 2)               NOT NULL  default=0
+  metodo_pago                  VARCHAR(20)                  NOT NULL  default='EFECTIVO'::character varying
+  estado                       VARCHAR(10)                  NOT NULL  default='PAGADA'::character varying
+  observaciones                TEXT                         NULL
+  anulada_en                   TIMESTAMP                    NULL
+  motivo_anula                 VARCHAR(200)                 NULL
+  creado_en                    TIMESTAMP                    NOT NULL  default=now()
+  usuario_id                   INTEGER                      NULL
+  caja_sesion_id               INTEGER                      NULL
+  PK: id
+  FK: caja_sesion_id -> caja_sesion.id
+  FK: cliente_id -> cliente.id
+  FK: usuario_id -> usuario.id
+  UNIQUE: numero
+  CHECK: estado::text = 'ANULADA'::text AND anulada_en IS NOT NULL OR estado::text = 'PAGADA'::text AND anulada_en IS NULL
+  CHECK: estado::text = ANY (ARRAY['PAGADA'::character varying, 'ANULADA'::character varying]::text[])
+  CHECK: total_iva >= 0::numeric
+  CHECK: metodo_pago::text = ANY (ARRAY['EFECTIVO'::character varying, 'TARJETA'::character varying, 'TRANSFERENCIA'::character varying, 'MIXTO'::character varying]::text[])
+  CHECK: subtotal >= 0::numeric
+  CHECK: total >= 0::numeric
+  INDEX: idx_venta_cliente (cliente_id)
+  INDEX: idx_venta_estado (estado)
+  INDEX: idx_venta_fecha (fecha)
+  INDEX: idx_venta_usuario (usuario_id)
+  INDEX: venta_numero_key (numero)
+
+===== venta_item  (0 filas) =====
+  id                           INTEGER                      NOT NULL  default=nextval('"public".venta_item_id_seq'::regclass)
+  venta_id                     INTEGER                      NOT NULL
+  producto_id                  INTEGER                      NOT NULL
+  cantidad                     NUMERIC(10, 3)               NOT NULL
+  precio_unitario              NUMERIC(12, 2)               NOT NULL
+  iva_pct                      NUMERIC(5, 2)                NOT NULL
+  subtotal_linea               NUMERIC(12, 2)               NOT NULL
+  iva_linea                    NUMERIC(12, 2)               NOT NULL
+  total_linea                  NUMERIC(12, 2)               NOT NULL
+  PK: id
+  FK: producto_id -> producto.id
+  FK: venta_id -> venta.id
+  UNIQUE: venta_id, producto_id
+  CHECK: cantidad > 0::numeric
+  CHECK: iva_pct >= 0::numeric AND iva_pct <= 100::numeric
+  CHECK: precio_unitario >= 0::numeric
+  INDEX: idx_item_producto (producto_id)
+  INDEX: idx_item_venta (venta_id)
+  INDEX: uq_item_venta_producto (venta_id, producto_id)
+
+VISTAS en public: vw_productos_bajo_stock, vw_ventas_por_dia
