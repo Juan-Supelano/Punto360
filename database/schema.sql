@@ -1,457 +1,310 @@
--- =============================================================================
---  CUADRE POS — Esquema de base de datos
---  Motor      : PostgreSQL 16 (Google Cloud SQL)
---  Proyecto   : Actividad integradora — Desarrollo de aplicaciones en la nube
---  Archivo    : database/schema.sql
 --
---  ORGANIZACIÓN DEL ARCHIVO
---    BLOQUE 0 — Utilidades (funciones y secuencias)
---    BLOQUE 1 — NÚCLEO      : obligatorio, cumple el mínimo de la guía
---    BLOQUE 2 — EXTRAS      : recomendados (kardex y usuarios/roles)
---    BLOQUE 3 — OPCIONALES  : compras, caja y configuración del comercio
---    BLOQUE 4 — Vistas de apoyo
+-- PostgreSQL database dump
 --
---  Cada bloque es independiente: si deciden recortar el alcance, borren el
---  bloque completo de abajo hacia arriba (4 → 3 → 2) sin tocar el NÚCLEO.
+
+-- Dumped from database version 16.9
+-- Dumped by pg_dump version 16.9
+
+-- Started on 2026-09-10 15:43:29
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
 --
---  CONVENCIONES
---    · Dinero      -> NUMERIC(12,2). NUNCA float/real: introduce errores de
---                     redondeo en los totales de la factura.
---    · Cantidades  -> NUMERIC(10,3) para permitir venta por peso (kg, lt).
---    · Fechas      -> TIMESTAMPTZ (con zona horaria). Cloud SQL corre en UTC.
---    · Estados     -> VARCHAR + CHECK en vez de tipo ENUM nativo: agregar un
---                     valor nuevo es un ALTER simple y no rompe el ORM.
---    · Borrado     -> lógico (columna `activo` / estado 'ANULADA'). El
---                     histórico de ventas nunca se destruye.
--- =============================================================================
-
-
--- -----------------------------------------------------------------------------
--- SOLO PARA DESARROLLO: descomentar para reconstruir la base desde cero.
--- ¡No ejecutar en la instancia que van a sustentar!
--- -----------------------------------------------------------------------------
--- DROP VIEW  IF EXISTS vw_productos_bajo_stock, vw_ventas_por_dia CASCADE;
--- DROP TABLE IF EXISTS compra_item, compra, proveedor, caja_sesion,
---                      configuracion_comercio, movimiento_inventario,
---                      venta_item, venta, producto, categoria, cliente,
---                      usuario CASCADE;
--- DROP SEQUENCE IF EXISTS venta_numero_seq;
--- DROP FUNCTION IF EXISTS set_actualizado_en();
-
-
--- =============================================================================
--- BLOQUE 0 — UTILIDADES
--- =============================================================================
-
--- Mantiene `actualizado_en` al día sin que el backend tenga que acordarse.
-CREATE OR REPLACE FUNCTION set_actualizado_en()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.actualizado_en = now();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Consecutivo de facturación. Postgres garantiza que dos ventas simultáneas
--- nunca reciban el mismo número, cosa que un MAX(id)+1 en el backend no puede
--- garantizar. Formato resultante: F-000001, F-000002, ...
-CREATE SEQUENCE venta_numero_seq START WITH 1 INCREMENT BY 1;
-
-
--- =============================================================================
--- BLOQUE 1 — NÚCLEO
--- =============================================================================
-
--- -----------------------------------------------------------------------------
--- categoria — agrupa el catálogo de productos
--- -----------------------------------------------------------------------------
-CREATE TABLE categoria (
-    id           SERIAL       PRIMARY KEY,
-    nombre       VARCHAR(80)  NOT NULL UNIQUE,
-    descripcion  TEXT,
-    activo       BOOLEAN      NOT NULL DEFAULT TRUE,
-    creado_en    TIMESTAMPTZ  NOT NULL DEFAULT now(),
-
-    CONSTRAINT ck_categoria_nombre_no_vacio CHECK (length(trim(nombre)) > 0)
-);
-
-COMMENT ON TABLE  categoria        IS 'Categorías del catálogo (Bebidas, Aseo, Papelería...).';
-COMMENT ON COLUMN categoria.activo IS 'Borrado lógico: DELETE en la API pone FALSE, no elimina la fila.';
-
-
--- -----------------------------------------------------------------------------
--- producto — catálogo e inventario
--- -----------------------------------------------------------------------------
-CREATE TABLE producto (
-    id              SERIAL         PRIMARY KEY,
-    categoria_id    INTEGER        NOT NULL,
-    sku             VARCHAR(40)    NOT NULL UNIQUE,
-    nombre          VARCHAR(150)   NOT NULL,
-    descripcion     TEXT,
-    precio_venta    NUMERIC(12,2)  NOT NULL,
-    costo           NUMERIC(12,2)  NOT NULL DEFAULT 0,
-    iva_pct         NUMERIC(5,2)   NOT NULL DEFAULT 19.00,
-    stock_actual    INTEGER        NOT NULL DEFAULT 0,
-    stock_minimo    INTEGER        NOT NULL DEFAULT 0,
-    unidad_medida   VARCHAR(15)    NOT NULL DEFAULT 'UND',
-    activo          BOOLEAN        NOT NULL DEFAULT TRUE,
-    creado_en       TIMESTAMPTZ    NOT NULL DEFAULT now(),
-    actualizado_en  TIMESTAMPTZ    NOT NULL DEFAULT now(),
-
-    CONSTRAINT fk_producto_categoria
-        FOREIGN KEY (categoria_id) REFERENCES categoria (id)
-        ON DELETE RESTRICT,
-
-    CONSTRAINT ck_producto_precio     CHECK (precio_venta >= 0),
-    CONSTRAINT ck_producto_costo      CHECK (costo        >= 0),
-    CONSTRAINT ck_producto_iva        CHECK (iva_pct      >= 0 AND iva_pct <= 100),
-    CONSTRAINT ck_producto_stock      CHECK (stock_actual >= 0),
-    CONSTRAINT ck_producto_stock_min  CHECK (stock_minimo >= 0),
-    CONSTRAINT ck_producto_unidad     CHECK (unidad_medida IN ('UND','KG','LT','MT','CAJA','PAQ'))
-);
-
-CREATE INDEX idx_producto_categoria ON producto (categoria_id);
-CREATE INDEX idx_producto_activo    ON producto (activo);
--- Acelera el buscador del frontend (búsqueda insensible a mayúsculas).
-CREATE INDEX idx_producto_nombre    ON producto (lower(nombre));
-
-CREATE TRIGGER trg_producto_actualizado
-    BEFORE UPDATE ON producto
-    FOR EACH ROW EXECUTE FUNCTION set_actualizado_en();
-
-COMMENT ON TABLE  producto              IS 'Productos del comercio, con precio e inventario.';
-COMMENT ON COLUMN producto.sku          IS 'Código interno o código de barras. Único en todo el comercio.';
-COMMENT ON COLUMN producto.precio_venta IS 'Precio SIN IVA, en pesos colombianos.';
-COMMENT ON COLUMN producto.iva_pct      IS 'IVA por producto: 19 general, 5 reducido, 0 exento/excluido.';
-COMMENT ON COLUMN producto.stock_minimo IS 'Umbral para la alerta de reposición.';
-
-
--- -----------------------------------------------------------------------------
--- cliente — destinatario de la factura
--- -----------------------------------------------------------------------------
-CREATE TABLE cliente (
-    id         SERIAL       PRIMARY KEY,
-    tipo_doc   VARCHAR(5)   NOT NULL DEFAULT 'CC',
-    num_doc    VARCHAR(20)  NOT NULL UNIQUE,
-    nombre     VARCHAR(150) NOT NULL,
-    email      VARCHAR(120),
-    telefono   VARCHAR(30),
-    direccion  VARCHAR(200),
-    activo     BOOLEAN      NOT NULL DEFAULT TRUE,
-    creado_en  TIMESTAMPTZ  NOT NULL DEFAULT now(),
-
-    CONSTRAINT ck_cliente_tipo_doc CHECK (tipo_doc IN ('CC','NIT','CE','TI','PAS'))
-);
-
-CREATE INDEX idx_cliente_nombre ON cliente (lower(nombre));
-
-COMMENT ON TABLE  cliente         IS 'Clientes del comercio. La fila id=1 es el consumidor final.';
-COMMENT ON COLUMN cliente.num_doc IS 'Cédula o NIT. Único; valídenlo también con Pydantic.';
-
-
--- -----------------------------------------------------------------------------
--- venta — encabezado de la factura
--- -----------------------------------------------------------------------------
-CREATE TABLE venta (
-    id            SERIAL         PRIMARY KEY,
-    numero        VARCHAR(20)    NOT NULL UNIQUE
-                                 DEFAULT ('F-' || lpad(nextval('venta_numero_seq')::text, 6, '0')),
-    cliente_id    INTEGER,
-    fecha         TIMESTAMPTZ    NOT NULL DEFAULT now(),
-    subtotal      NUMERIC(12,2)  NOT NULL DEFAULT 0,
-    total_iva     NUMERIC(12,2)  NOT NULL DEFAULT 0,
-    total         NUMERIC(12,2)  NOT NULL DEFAULT 0,
-    metodo_pago   VARCHAR(20)    NOT NULL DEFAULT 'EFECTIVO',
-    estado        VARCHAR(10)    NOT NULL DEFAULT 'PAGADA',
-    observaciones TEXT,
-    anulada_en    TIMESTAMPTZ,
-    motivo_anula  VARCHAR(200),
-    creado_en     TIMESTAMPTZ    NOT NULL DEFAULT now(),
-
-    CONSTRAINT fk_venta_cliente
-        FOREIGN KEY (cliente_id) REFERENCES cliente (id)
-        ON DELETE SET NULL,
-
-    CONSTRAINT ck_venta_metodo   CHECK (metodo_pago IN ('EFECTIVO','TARJETA','TRANSFERENCIA','MIXTO')),
-    CONSTRAINT ck_venta_estado   CHECK (estado      IN ('PAGADA','ANULADA')),
-    CONSTRAINT ck_venta_subtotal CHECK (subtotal  >= 0),
-    CONSTRAINT ck_venta_iva      CHECK (total_iva >= 0),
-    CONSTRAINT ck_venta_total    CHECK (total     >= 0),
-    -- Si está anulada, tiene que constar cuándo. Evita anulaciones "fantasma".
-    CONSTRAINT ck_venta_anulacion CHECK (
-        (estado = 'ANULADA' AND anulada_en IS NOT NULL) OR
-        (estado = 'PAGADA'  AND anulada_en IS NULL)
-    )
-);
-
-CREATE INDEX idx_venta_fecha   ON venta (fecha DESC);
-CREATE INDEX idx_venta_estado  ON venta (estado);
-CREATE INDEX idx_venta_cliente ON venta (cliente_id);
-
-COMMENT ON TABLE  venta            IS 'Encabezado de venta. Nunca se borra físicamente: se anula.';
-COMMENT ON COLUMN venta.numero     IS 'Consecutivo generado por la secuencia venta_numero_seq (F-000001).';
-COMMENT ON COLUMN venta.cliente_id IS 'NULL = consumidor final sin identificar.';
-COMMENT ON COLUMN venta.subtotal   IS 'Suma de líneas SIN IVA. Se calcula en el backend, jamás se recibe del frontend.';
-
-
--- -----------------------------------------------------------------------------
--- venta_item — líneas de la factura
--- -----------------------------------------------------------------------------
-CREATE TABLE venta_item (
-    id               SERIAL         PRIMARY KEY,
-    venta_id         INTEGER        NOT NULL,
-    producto_id      INTEGER        NOT NULL,
-    cantidad         NUMERIC(10,3)  NOT NULL,
-    precio_unitario  NUMERIC(12,2)  NOT NULL,
-    iva_pct          NUMERIC(5,2)   NOT NULL,
-    subtotal_linea   NUMERIC(12,2)  NOT NULL,
-    iva_linea        NUMERIC(12,2)  NOT NULL,
-    total_linea      NUMERIC(12,2)  NOT NULL,
-
-    CONSTRAINT fk_item_venta
-        FOREIGN KEY (venta_id) REFERENCES venta (id)
-        ON DELETE CASCADE,
-
-    CONSTRAINT fk_item_producto
-        FOREIGN KEY (producto_id) REFERENCES producto (id)
-        ON DELETE RESTRICT,
-
-    CONSTRAINT ck_item_cantidad CHECK (cantidad > 0),
-    CONSTRAINT ck_item_precio   CHECK (precio_unitario >= 0),
-    CONSTRAINT ck_item_iva      CHECK (iva_pct >= 0 AND iva_pct <= 100),
-    -- Un mismo producto no se repite en la factura: se acumula la cantidad.
-    CONSTRAINT uq_item_venta_producto UNIQUE (venta_id, producto_id)
-);
-
-CREATE INDEX idx_item_venta    ON venta_item (venta_id);
-CREATE INDEX idx_item_producto ON venta_item (producto_id);
-
-COMMENT ON TABLE  venta_item                 IS 'Detalle de la venta. Relación 1:N con venta.';
-COMMENT ON COLUMN venta_item.precio_unitario IS 'COPIA CONGELADA del precio al momento de vender. Si el producto sube de precio mañana, esta factura no cambia.';
-COMMENT ON COLUMN venta_item.iva_pct         IS 'También congelado: las tarifas de IVA cambian por ley.';
-
-
--- =============================================================================
--- BLOQUE 2 — EXTRAS  (kardex y usuarios)
---   Para recortar el alcance, borren desde aquí hasta el fin del bloque.
--- =============================================================================
-
--- -----------------------------------------------------------------------------
--- usuario — quién opera la caja (habilita autenticación JWT y roles)
--- -----------------------------------------------------------------------------
-CREATE TABLE usuario (
-    id             SERIAL        PRIMARY KEY,
-    email          VARCHAR(120)  NOT NULL UNIQUE,
-    nombre         VARCHAR(120)  NOT NULL,
-    password_hash  VARCHAR(255)  NOT NULL,
-    rol            VARCHAR(10)   NOT NULL DEFAULT 'CAJERO',
-    activo         BOOLEAN       NOT NULL DEFAULT TRUE,
-    creado_en      TIMESTAMPTZ   NOT NULL DEFAULT now(),
-    ultimo_acceso  TIMESTAMPTZ,
-
-    CONSTRAINT ck_usuario_rol CHECK (rol IN ('ADMIN','CAJERO'))
-);
-
-COMMENT ON TABLE  usuario               IS 'Operadores del POS. Autenticación con JWT.';
-COMMENT ON COLUMN usuario.password_hash IS 'Hash bcrypt. Jamás texto plano, ni siquiera en seed.sql.';
-
--- La venta guarda quién la hizo. Se agrega por ALTER para que el BLOQUE 1
--- siga siendo autosuficiente si deciden no implementar autenticación.
-ALTER TABLE venta ADD COLUMN usuario_id INTEGER;
-ALTER TABLE venta ADD CONSTRAINT fk_venta_usuario
-    FOREIGN KEY (usuario_id) REFERENCES usuario (id) ON DELETE SET NULL;
-CREATE INDEX idx_venta_usuario ON venta (usuario_id);
-
-
--- -----------------------------------------------------------------------------
--- movimiento_inventario — kardex: por qué el stock es el que es
--- -----------------------------------------------------------------------------
-CREATE TABLE movimiento_inventario (
-    id                SERIAL         PRIMARY KEY,
-    producto_id       INTEGER        NOT NULL,
-    tipo              VARCHAR(12)    NOT NULL,
-    cantidad          NUMERIC(10,3)  NOT NULL,
-    stock_anterior    INTEGER        NOT NULL,
-    stock_resultante  INTEGER        NOT NULL,
-    venta_id          INTEGER,
-    usuario_id        INTEGER,
-    motivo            VARCHAR(200),
-    fecha             TIMESTAMPTZ    NOT NULL DEFAULT now(),
-
-    CONSTRAINT fk_mov_producto
-        FOREIGN KEY (producto_id) REFERENCES producto (id) ON DELETE RESTRICT,
-    CONSTRAINT fk_mov_venta
-        FOREIGN KEY (venta_id) REFERENCES venta (id) ON DELETE SET NULL,
-    CONSTRAINT fk_mov_usuario
-        FOREIGN KEY (usuario_id) REFERENCES usuario (id) ON DELETE SET NULL,
-
-    CONSTRAINT ck_mov_tipo     CHECK (tipo IN ('ENTRADA','SALIDA','VENTA','ANULACION','AJUSTE','COMPRA')),
-    CONSTRAINT ck_mov_cantidad CHECK (cantidad > 0),
-    CONSTRAINT ck_mov_stock    CHECK (stock_resultante >= 0)
-);
-
-CREATE INDEX idx_mov_producto_fecha ON movimiento_inventario (producto_id, fecha DESC);
-CREATE INDEX idx_mov_venta          ON movimiento_inventario (venta_id);
-
-COMMENT ON TABLE  movimiento_inventario          IS 'Kardex. Cada cambio de stock deja rastro; permite auditar y reconstruir el inventario.';
-COMMENT ON COLUMN movimiento_inventario.cantidad IS 'Siempre positiva. El signo lo determina la columna tipo.';
-
-
--- =============================================================================
--- BLOQUE 3 — OPCIONALES  (solo si sobra tiempo)
---   Borren el bloque completo si no los van a implementar.
--- =============================================================================
-
--- -----------------------------------------------------------------------------
--- configuracion_comercio — datos del negocio (una sola fila)
--- -----------------------------------------------------------------------------
-CREATE TABLE configuracion_comercio (
-    id                SERIAL        PRIMARY KEY,
-    razon_social      VARCHAR(150)  NOT NULL,
-    nit               VARCHAR(20)   NOT NULL,
-    direccion         VARCHAR(200),
-    telefono          VARCHAR(30),
-    prefijo_factura   VARCHAR(5)    NOT NULL DEFAULT 'F',
-    resolucion_dian   VARCHAR(60),
-    regimen           VARCHAR(30)   NOT NULL DEFAULT 'NO RESPONSABLE DE IVA',
-    actualizado_en    TIMESTAMPTZ   NOT NULL DEFAULT now(),
-
-    -- Una única fila posible: evita que la configuración se duplique.
-    CONSTRAINT ck_config_fila_unica CHECK (id = 1)
-);
-
-COMMENT ON TABLE configuracion_comercio IS 'Datos del comercio para el encabezado del comprobante. Fila única (id=1).';
-
-
--- -----------------------------------------------------------------------------
--- proveedor / compra / compra_item — entradas de mercancía
--- -----------------------------------------------------------------------------
-CREATE TABLE proveedor (
-    id         SERIAL       PRIMARY KEY,
-    nit        VARCHAR(20)  NOT NULL UNIQUE,
-    nombre     VARCHAR(150) NOT NULL,
-    contacto   VARCHAR(120),
-    telefono   VARCHAR(30),
-    email      VARCHAR(120),
-    activo     BOOLEAN      NOT NULL DEFAULT TRUE,
-    creado_en  TIMESTAMPTZ  NOT NULL DEFAULT now()
-);
-
-COMMENT ON TABLE proveedor IS 'Proveedores de mercancía.';
-
-CREATE TABLE compra (
-    id             SERIAL         PRIMARY KEY,
-    proveedor_id   INTEGER        NOT NULL,
-    numero_factura VARCHAR(40)    NOT NULL,
-    fecha          TIMESTAMPTZ    NOT NULL DEFAULT now(),
-    subtotal       NUMERIC(12,2)  NOT NULL DEFAULT 0,
-    total_iva      NUMERIC(12,2)  NOT NULL DEFAULT 0,
-    total          NUMERIC(12,2)  NOT NULL DEFAULT 0,
-    estado         VARCHAR(10)    NOT NULL DEFAULT 'RECIBIDA',
-    creado_en      TIMESTAMPTZ    NOT NULL DEFAULT now(),
-
-    CONSTRAINT fk_compra_proveedor
-        FOREIGN KEY (proveedor_id) REFERENCES proveedor (id) ON DELETE RESTRICT,
-    CONSTRAINT ck_compra_estado CHECK (estado IN ('RECIBIDA','ANULADA')),
-    -- El mismo proveedor no puede facturarnos dos veces con el mismo número.
-    CONSTRAINT uq_compra_proveedor_factura UNIQUE (proveedor_id, numero_factura)
-);
-
-CREATE INDEX idx_compra_fecha ON compra (fecha DESC);
-
-CREATE TABLE compra_item (
-    id              SERIAL         PRIMARY KEY,
-    compra_id       INTEGER        NOT NULL,
-    producto_id     INTEGER        NOT NULL,
-    cantidad        NUMERIC(10,3)  NOT NULL,
-    costo_unitario  NUMERIC(12,2)  NOT NULL,
-    subtotal_linea  NUMERIC(12,2)  NOT NULL,
-
-    CONSTRAINT fk_compra_item_compra
-        FOREIGN KEY (compra_id) REFERENCES compra (id) ON DELETE CASCADE,
-    CONSTRAINT fk_compra_item_producto
-        FOREIGN KEY (producto_id) REFERENCES producto (id) ON DELETE RESTRICT,
-    CONSTRAINT ck_compra_item_cantidad CHECK (cantidad > 0),
-    CONSTRAINT ck_compra_item_costo    CHECK (costo_unitario >= 0)
-);
-
-CREATE INDEX idx_compra_item_compra ON compra_item (compra_id);
-
-COMMENT ON TABLE compra_item IS 'Detalle de compra. Al registrarla, suma stock y genera movimiento tipo COMPRA.';
-
-
--- -----------------------------------------------------------------------------
--- caja_sesion — apertura, cierre y arqueo del turno
--- -----------------------------------------------------------------------------
-CREATE TABLE caja_sesion (
-    id              SERIAL         PRIMARY KEY,
-    usuario_id      INTEGER,
-    abierta_en      TIMESTAMPTZ    NOT NULL DEFAULT now(),
-    cerrada_en      TIMESTAMPTZ,
-    base_inicial    NUMERIC(12,2)  NOT NULL DEFAULT 0,
-    total_esperado  NUMERIC(12,2),
-    total_contado   NUMERIC(12,2),
-    diferencia      NUMERIC(12,2),
-    estado          VARCHAR(10)    NOT NULL DEFAULT 'ABIERTA',
-    observaciones   TEXT,
-
-    CONSTRAINT fk_caja_usuario
-        FOREIGN KEY (usuario_id) REFERENCES usuario (id) ON DELETE SET NULL,
-    CONSTRAINT ck_caja_estado CHECK (estado IN ('ABIERTA','CERRADA')),
-    CONSTRAINT ck_caja_base   CHECK (base_inicial >= 0)
-);
-
--- Solo puede haber una caja abierta a la vez.
-CREATE UNIQUE INDEX uq_caja_una_abierta
-    ON caja_sesion (estado) WHERE estado = 'ABIERTA';
-
-COMMENT ON TABLE caja_sesion            IS 'Turno de caja. diferencia = total_contado - total_esperado.';
-COMMENT ON COLUMN caja_sesion.diferencia IS 'Negativa = faltante, positiva = sobrante.';
-
--- Enlaza cada venta con el turno en el que se hizo.
-ALTER TABLE venta ADD COLUMN caja_sesion_id INTEGER;
-ALTER TABLE venta ADD CONSTRAINT fk_venta_caja
-    FOREIGN KEY (caja_sesion_id) REFERENCES caja_sesion (id) ON DELETE SET NULL;
-
-
--- =============================================================================
--- BLOQUE 4 — VISTAS DE APOYO
---   Le ahorran consultas al backend y quedan muy bien en la sustentación.
--- =============================================================================
-
--- Productos que hay que reponer.
-CREATE OR REPLACE VIEW vw_productos_bajo_stock AS
-SELECT p.id,
-       p.sku,
-       p.nombre,
-       c.nombre AS categoria,
-       p.stock_actual,
-       p.stock_minimo,
-       (p.stock_minimo - p.stock_actual) AS faltante
-FROM producto p
-JOIN categoria c ON c.id = p.categoria_id
-WHERE p.activo = TRUE
-  AND p.stock_actual <= p.stock_minimo
-ORDER BY faltante DESC;
-
-COMMENT ON VIEW vw_productos_bajo_stock IS 'Alerta de reposición: productos en o por debajo del stock mínimo.';
-
--- Ventas agrupadas por día (reporte del criterio de negocio).
-CREATE OR REPLACE VIEW vw_ventas_por_dia AS
-SELECT date_trunc('day', v.fecha)::date AS dia,
-       count(*)                          AS num_ventas,
-       sum(v.subtotal)                   AS subtotal,
-       sum(v.total_iva)                  AS iva,
-       sum(v.total)                      AS total
-FROM venta v
-WHERE v.estado = 'PAGADA'
-GROUP BY 1
-ORDER BY 1 DESC;
-
-COMMENT ON VIEW vw_ventas_por_dia IS 'Resumen diario de ventas pagadas. Excluye las anuladas.';
-
-
--- =============================================================================
--- FIN DEL ESQUEMA
---   Siguiente paso: ejecutar seed.sql para cargar datos de prueba.
--- =============================================================================
+-- TOC entry 5119 (class 0 OID 26374)
+-- Dependencies: 239
+-- Data for Name: caja_sesion; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.caja_sesion (id, usuario_id, abierta_en, cerrada_en, base_inicial, total_esperado, total_contado, diferencia, estado, observaciones) FROM stdin;
+\.
+
+
+--
+-- TOC entry 5097 (class 0 OID 26138)
+-- Dependencies: 217
+-- Data for Name: categoria; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.categoria (id, nombre, descripcion, activo, creado_en) FROM stdin;
+1	Bebidas	Gaseosas, aguas, jugos y bebidas energizantes	t	2026-09-10 01:00:58.293923-05
+2	Snacks y confitería	Paquetes, dulces y galletas	t	2026-09-10 01:00:58.293923-05
+3	Víveres	Productos de la canasta básica	t	2026-09-10 01:00:58.293923-05
+4	Aseo y hogar	Limpieza personal y del hogar	t	2026-09-10 01:00:58.293923-05
+5	Papelería	Útiles escolares y de oficina	t	2026-09-10 01:00:58.293923-05
+\.
+
+
+--
+-- TOC entry 5101 (class 0 OID 26186)
+-- Dependencies: 221
+-- Data for Name: cliente; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.cliente (id, tipo_doc, num_doc, nombre, email, telefono, direccion, activo, creado_en) FROM stdin;
+1	CC	222222222222	Consumidor final	\N	\N	\N	t	2026-09-10 01:00:58.293923-05
+2	CC	1020304050	Laura Jiménez Ospina	laura.jimenez@correo.co	3105558842	Cra 13 # 45-21, Bogotá	t	2026-09-10 01:00:58.293923-05
+3	CC	79654321	Andrés Mora Rincón	amora@correo.co	3122224411	Calle 68 # 11-30, Bogotá	t	2026-09-10 01:00:58.293923-05
+4	NIT	900123456-7	Panadería La Espiga SAS	compras@laespiga.co	6014455667	Av 1 de Mayo # 40-12, Bogotá	t	2026-09-10 01:00:58.293923-05
+5	CC	52987654	Diana Castaño Vélez	dcastano@correo.co	3009988776	Cra 7 # 120-45, Bogotá	t	2026-09-10 01:00:58.293923-05
+6	CE	E1234567	Marco Antonelli	m.antonelli@correo.co	3151112233	Calle 93 # 15-08, Bogotá	t	2026-09-10 01:00:58.293923-05
+\.
+
+
+--
+-- TOC entry 5115 (class 0 OID 26332)
+-- Dependencies: 235
+-- Data for Name: compra; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.compra (id, proveedor_id, numero_factura, fecha, subtotal, total_iva, total, estado, creado_en) FROM stdin;
+\.
+
+
+--
+-- TOC entry 5117 (class 0 OID 26354)
+-- Dependencies: 237
+-- Data for Name: compra_item; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.compra_item (id, compra_id, producto_id, cantidad, costo_unitario, subtotal_linea) FROM stdin;
+\.
+
+
+--
+-- TOC entry 5111 (class 0 OID 26308)
+-- Dependencies: 231
+-- Data for Name: configuracion_comercio; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.configuracion_comercio (id, razon_social, nit, direccion, telefono, prefijo_factura, resolucion_dian, regimen, actualizado_en, nombre_comercial, logo_url, email, ciudad) FROM stdin;
+1	Comercializadora Cuadre S.A.S.	901234567-8	Calle 45 # 12-30	3001234567	F	\N	NO RESPONSABLE DE IVA	2026-09-10 15:01:16.415731-05	Cuadre POS	https://media.istockphoto.com/id/1201144331/es/vector/logotipo-de-icon-design-element-para-la-empresa-de-innovaci%C3%B3n-tecnol%C3%B3gica-icono-tecnol%C3%B3gico.jpg?s=2048x2048&w=is&k=20&c=NTaJ1oDHiv5LcKfQDYERiw_MrDXdkCARng2m8qQXa1c=	contacto@cuadrepos.co	Bogotá D.C.
+\.
+
+
+--
+-- TOC entry 5109 (class 0 OID 26280)
+-- Dependencies: 229
+-- Data for Name: movimiento_inventario; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.movimiento_inventario (id, producto_id, tipo, cantidad, stock_anterior, stock_resultante, venta_id, usuario_id, motivo, fecha) FROM stdin;
+\.
+
+
+--
+-- TOC entry 5099 (class 0 OID 26152)
+-- Dependencies: 219
+-- Data for Name: producto; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.producto (id, categoria_id, sku, nombre, descripcion, precio_venta, costo, iva_pct, stock_actual, stock_minimo, unidad_medida, activo, creado_en, actualizado_en) FROM stdin;
+1	1	BEB-001	Gaseosa cola 400 ml	\N	2100.00	1450.00	19.00	48	12	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
+2	1	BEB-002	Gaseosa naranja 400 ml	\N	2100.00	1450.00	19.00	36	12	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
+3	1	BEB-003	Agua sin gas 600 ml	\N	1500.00	950.00	19.00	60	24	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
+4	1	BEB-004	Jugo de mango caja 200 ml	\N	1800.00	1200.00	19.00	30	12	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
+5	1	BEB-005	Bebida energizante 250 ml	\N	4200.00	2900.00	19.00	18	6	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
+6	1	BEB-006	Cerveza lata 330 ml	\N	3200.00	2200.00	19.00	72	24	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
+7	1	BEB-007	Té helado limón 400 ml	\N	2400.00	1600.00	19.00	9	12	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
+8	2	SNK-001	Papas fritas naturales 45 g	\N	2500.00	1650.00	19.00	40	15	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
+9	2	SNK-002	Papas fritas limón 45 g	\N	2500.00	1650.00	19.00	25	15	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
+10	2	SNK-003	Galletas wafer vainilla	\N	1900.00	1250.00	19.00	33	12	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
+11	2	SNK-004	Chocolatina con maní 40 g	\N	2200.00	1450.00	19.00	50	20	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
+12	2	SNK-005	Maní salado 100 g	\N	3100.00	2050.00	19.00	16	8	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
+13	2	SNK-006	Bombones surtidos	\N	350.00	210.00	19.00	200	60	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
+14	2	SNK-007	Ponqué individual	\N	2800.00	1900.00	19.00	6	10	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
+15	3	VIV-001	Arroz blanco 500 g	\N	3200.00	2400.00	0.00	45	15	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
+16	3	VIV-002	Panela cuadrada 500 g	\N	3800.00	2900.00	0.00	22	10	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
+17	3	VIV-003	Aceite de girasol 1 L	\N	12500.00	9800.00	5.00	18	6	LT	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
+18	3	VIV-004	Lentejas 500 g	\N	4100.00	3100.00	0.00	20	8	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
+19	3	VIV-005	Leche entera bolsa 1 L	\N	3900.00	3100.00	0.00	30	12	LT	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
+20	3	VIV-006	Huevos AA bandeja x30	\N	21000.00	17500.00	0.00	12	4	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
+21	3	VIV-007	Café molido 250 g	\N	11500.00	8900.00	5.00	14	6	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
+22	3	VIV-008	Azúcar blanca 1 kg	\N	4800.00	3700.00	5.00	26	10	KG	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
+25	4	ASE-003	Detergente en polvo 900 g	\N	11200.00	8600.00	19.00	15	6	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
+26	4	ASE-004	Blanqueador 1 L	\N	4500.00	3200.00	19.00	20	8	LT	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
+27	4	ASE-005	Crema dental 100 ml	\N	6800.00	4900.00	19.00	5	10	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
+28	4	ASE-006	Esponja para loza	\N	1600.00	950.00	19.00	40	15	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
+29	5	PAP-001	Cuaderno cuadriculado 100 hojas	\N	5400.00	3900.00	19.00	24	10	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
+30	5	PAP-002	Bolígrafo negro	\N	1200.00	700.00	19.00	80	30	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
+23	4	ASE-001	Jabón de tocador 110 g	\N	2700.00	1800.00	19.00	30	12	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 15:27:31.297032-05
+24	4	ASE-002	Papel higiénico x4 rollos	\N	7900.00	5900.00	19.00	28	10	PAQ	f	2026-09-10 01:00:58.293923-05	2026-09-10 15:27:34.683476-05
+\.
+
+
+--
+-- TOC entry 5113 (class 0 OID 26321)
+-- Dependencies: 233
+-- Data for Name: proveedor; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.proveedor (id, nit, nombre, contacto, telefono, email, activo, creado_en) FROM stdin;
+1	890900943-1	Distribuidora Andina SAS	Julián Peña	6013334455	ventas@andina.co	t	2026-09-10 01:00:58.293923-05
+2	811004321-5	Comercial El Trigal Ltda	Sandra Rojas	6014447788	pedidos@eltrigal.co	t	2026-09-10 01:00:58.293923-05
+3	830045678-9	Aseo Total SAS	Óscar Ruiz	6015556699	contacto@aseototal.co	t	2026-09-10 01:00:58.293923-05
+\.
+
+
+--
+-- TOC entry 5107 (class 0 OID 26259)
+-- Dependencies: 227
+-- Data for Name: usuario; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.usuario (id, email, nombre, password_hash, rol, activo, creado_en, ultimo_acceso, comercio_id) FROM stdin;
+2	cajero@cuadrepos.co	Cajero demo	$2b$12$sJSDTp95vhDls5pshxIiNunh9JKcP.z4JisDOBF2DwhssEvAuDLlG	CAJERO	t	2026-09-10 01:00:58.293923-05	\N	1
+1	admin@cuadrepos.co	Administrador demo	$2b$12$1.M8rSma4qX1DZsrVjnNoet2A.yT.Z8cKEUZ7wPQSWoR8b/EX/nZu	ADMIN	t	2026-09-10 01:00:58.293923-05	2026-09-10 20:18:41.595383-05	1
+\.
+
+
+--
+-- TOC entry 5103 (class 0 OID 26202)
+-- Dependencies: 223
+-- Data for Name: venta; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.venta (id, numero, cliente_id, fecha, subtotal, total_iva, total, metodo_pago, estado, observaciones, anulada_en, motivo_anula, creado_en, usuario_id, caja_sesion_id) FROM stdin;
+\.
+
+
+--
+-- TOC entry 5105 (class 0 OID 26235)
+-- Dependencies: 225
+-- Data for Name: venta_item; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.venta_item (id, venta_id, producto_id, cantidad, precio_unitario, iva_pct, subtotal_linea, iva_linea, total_linea) FROM stdin;
+\.
+
+
+--
+-- TOC entry 5166 (class 0 OID 0)
+-- Dependencies: 238
+-- Name: caja_sesion_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+--
+
+SELECT pg_catalog.setval('public.caja_sesion_id_seq', 1, false);
+
+
+--
+-- TOC entry 5167 (class 0 OID 0)
+-- Dependencies: 216
+-- Name: categoria_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+--
+
+SELECT pg_catalog.setval('public.categoria_id_seq', 5, true);
+
+
+--
+-- TOC entry 5168 (class 0 OID 0)
+-- Dependencies: 220
+-- Name: cliente_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+--
+
+SELECT pg_catalog.setval('public.cliente_id_seq', 6, true);
+
+
+--
+-- TOC entry 5169 (class 0 OID 0)
+-- Dependencies: 234
+-- Name: compra_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+--
+
+SELECT pg_catalog.setval('public.compra_id_seq', 1, false);
+
+
+--
+-- TOC entry 5170 (class 0 OID 0)
+-- Dependencies: 236
+-- Name: compra_item_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+--
+
+SELECT pg_catalog.setval('public.compra_item_id_seq', 1, false);
+
+
+--
+-- TOC entry 5171 (class 0 OID 0)
+-- Dependencies: 230
+-- Name: configuracion_comercio_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+--
+
+SELECT pg_catalog.setval('public.configuracion_comercio_id_seq', 1, true);
+
+
+--
+-- TOC entry 5172 (class 0 OID 0)
+-- Dependencies: 228
+-- Name: movimiento_inventario_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+--
+
+SELECT pg_catalog.setval('public.movimiento_inventario_id_seq', 1, false);
+
+
+--
+-- TOC entry 5173 (class 0 OID 0)
+-- Dependencies: 218
+-- Name: producto_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+--
+
+SELECT pg_catalog.setval('public.producto_id_seq', 30, true);
+
+
+--
+-- TOC entry 5174 (class 0 OID 0)
+-- Dependencies: 232
+-- Name: proveedor_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+--
+
+SELECT pg_catalog.setval('public.proveedor_id_seq', 3, true);
+
+
+--
+-- TOC entry 5175 (class 0 OID 0)
+-- Dependencies: 226
+-- Name: usuario_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+--
+
+SELECT pg_catalog.setval('public.usuario_id_seq', 2, true);
+
+
+--
+-- TOC entry 5176 (class 0 OID 0)
+-- Dependencies: 222
+-- Name: venta_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+--
+
+SELECT pg_catalog.setval('public.venta_id_seq', 1, false);
+
+
+--
+-- TOC entry 5177 (class 0 OID 0)
+-- Dependencies: 224
+-- Name: venta_item_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+--
+
+SELECT pg_catalog.setval('public.venta_item_id_seq', 1, false);
+
+
+--
+-- TOC entry 5178 (class 0 OID 0)
+-- Dependencies: 215
+-- Name: venta_numero_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+--
+
+SELECT pg_catalog.setval('public.venta_numero_seq', 1, false);
+
+
+-- Completed on 2026-09-10 15:43:30
+
+--
+-- PostgreSQL database dump complete
+--
+
