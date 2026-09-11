@@ -7,9 +7,7 @@ from app.schemas.categoria import CategoriaResumen
 
 
 class ProductoCrear(BaseModel):
-    # Normalmente va vacio: el backend arma el SKU con el prefijo de la
-    # categoria. Solo se manda si hay que respetar un codigo de proveedor.
-    sku: str | None = Field(default=None, max_length=40)
+    # El SKU no se manda: lo arma el backend con el prefijo de la categoria.
     nombre: str = Field(min_length=1, max_length=150)
     descripcion: str | None = None
     precio_venta: Decimal = Field(ge=0)
@@ -22,7 +20,7 @@ class ProductoCrear(BaseModel):
 
 
 class ProductoActualizar(BaseModel):
-    sku: str | None = Field(default=None, min_length=1, max_length=40)
+    # El SKU tampoco se edita: es un codigo derivado de la categoria.
     nombre: str | None = Field(default=None, min_length=1, max_length=150)
     descripcion: str | None = None
     precio_venta: Decimal | None = Field(default=None, ge=0)
@@ -55,3 +53,14 @@ class ProductoLeer(BaseModel):
     # Calculados en el modelo, no son columnas.
     stock_bajo: bool
     margen_pct: Decimal | None
+
+
+class ProductoResumen(BaseModel):
+    """Version corta, la que va anidada dentro de una compra o una venta."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    sku: str
+    nombre: str
+    unidad_medida: str

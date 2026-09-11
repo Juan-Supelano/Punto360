@@ -106,3 +106,14 @@ def solo_admin(usuario: Usuario = Depends(usuario_actual)) -> Usuario:
             "Esta accion requiere rol ADMIN",
         )
     return usuario
+
+
+def solo_cajero(usuario: Usuario = Depends(usuario_actual)) -> Usuario:
+    """Quien vende es el cajero. El administrador consulta, no factura:
+    asi las ventas siempre tienen un responsable de mostrador identificable."""
+    if usuario.rol != "CAJERO":
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Solo un usuario con rol CAJERO puede registrar ventas",
+        )
+    return usuario

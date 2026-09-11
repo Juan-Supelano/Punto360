@@ -1,14 +1,24 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useAuth } from './auth.jsx'
 import Categorias from './pages/Categorias.jsx'
+import Compras from './pages/Compras.jsx'
 import Empresa from './pages/Empresa.jsx'
 import Login from './pages/Login.jsx'
 import Productos from './pages/Productos.jsx'
+import Proveedores from './pages/Proveedores.jsx'
+import Vender from './pages/Vender.jsx'
+import Ventas from './pages/Ventas.jsx'
 
+// rol: null = todos; 'ADMIN' o 'CAJERO' = solo ese rol.
+// El backend valida lo mismo: esconder el menú es comodidad, no seguridad.
 const VISTAS = [
-  { clave: 'productos', titulo: 'Productos', icono: '▦' },
-  { clave: 'categorias', titulo: 'Categorías', icono: '☰' },
-  { clave: 'empresa', titulo: 'Mi empresa', icono: '⌂' },
+  { clave: 'vender', titulo: 'Vender', icono: '⊕', rol: 'CAJERO' },
+  { clave: 'ventas', titulo: 'Ventas', icono: '≡', rol: null },
+  { clave: 'productos', titulo: 'Productos', icono: '▦', rol: null },
+  { clave: 'categorias', titulo: 'Categorías', icono: '☰', rol: null },
+  { clave: 'proveedores', titulo: 'Proveedores', icono: '⇄', rol: null },
+  { clave: 'compras', titulo: 'Compras', icono: '↧', rol: null },
+  { clave: 'empresa', titulo: 'Mi empresa', icono: '⌂', rol: null },
 ]
 
 function iniciales(nombre = '') {
@@ -22,7 +32,21 @@ function iniciales(nombre = '') {
 
 export default function App() {
   const { usuario, verificando, salir } = useAuth()
-  const [vista, setVista] = useState('productos')
+  const [vista, setVista] = useState(null)
+
+  const rol = usuario?.rol
+  const esAdmin = rol === 'ADMIN'
+  const visibles = VISTAS.filter((v) => v.rol === null || v.rol === rol)
+  const inicial = esAdmin ? 'ventas' : 'vender'
+
+  // Al entrar, y si el rol deja sin acceso a la vista actual, cae en la inicial.
+  useEffect(() => {
+    if (!rol) return
+    const actual = VISTAS.find((v) => v.clave === vista)
+    if (!actual || (actual.rol !== null && actual.rol !== rol)) {
+      setVista(esAdmin ? 'ventas' : 'vender')
+    }
+  }, [rol, vista, esAdmin])
 
   if (verificando) {
     return <div className="pantalla-carga">Cargando…</div>
@@ -33,6 +57,7 @@ export default function App() {
   }
 
   const comercio = usuario.comercio
+  const activa = vista ?? inicial
 
   return (
     <div className="disposicion">
@@ -52,16 +77,16 @@ export default function App() {
         </div>
 
         <nav className="lateral-nav">
-          {VISTAS.map((v) => (
+          {visibles.map((v) => (
             <button
               key={v.clave}
-              className={vista === v.clave ? 'nav-item activo' : 'nav-item'}
+              className={activa === v.clave ? 'nav-item activo' : 'nav-item'}
               onClick={() => setVista(v.clave)}
             >
               <span className="nav-icono" aria-hidden="true">
                 {v.icono}
               </span>
-              {v.titulo}
+              {v.titulo === 'Ventas' && !esAdmin ? 'Mis ventas' : v.titulo}
             </button>
           ))}
         </nav>
@@ -81,9 +106,13 @@ export default function App() {
       </aside>
 
       <main className="contenido">
-        {vista === 'productos' && <Productos />}
-        {vista === 'categorias' && <Categorias />}
-        {vista === 'empresa' && <Empresa />}
+        {activa === 'vender' && !esAdmin && <Vender />}
+        {activa === 'ventas' && <Ventas />}
+        {activa === 'productos' && <Productos />}
+        {activa === 'categorias' && <Categorias />}
+        {activa === 'proveedores' && <Proveedores />}
+        {activa === 'compras' && <Compras />}
+        {activa === 'empresa' && <Empresa />}
       </main>
     </div>
   )

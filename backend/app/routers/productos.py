@@ -1,10 +1,12 @@
+from decimal import Decimal
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
-from app.models import Categoria, Producto, Usuario
+from app.models import Categoria, MovimientoInventario, Producto, Usuario
 from app.models.producto import UNIDADES
 from app.schemas.producto import ProductoActualizar, ProductoCrear, ProductoLeer
 from app.seguridad import usuario_actual
@@ -109,32 +111,22 @@ def obtener(producto_id: int, db: Session = Depends(get_db)):
 
 @router.post("", response_model=ProductoLeer, status_code=status.HTTP_201_CREATED)
 def crear(datos: ProductoCrear, db: Session = Depends(get_db)):
+    """El SKU no se recibe: siempre lo arma el backend con el prefijo de la
+    categoria, que es lo que digito el administrador al crearla."""
     categoria = _buscar_categoria(db, datos.categoria_id)
     _validar_unidad(datos.unidad_medida)
 
-    campos = datos.model_dump(exclude={"sku"})
-    manual = datos.sku.strip().upper() if datos.sku else None
-
-    if manual and db.scalar(select(Producto).where(Producto.sku == manual)):
-        raise HTTPException(
-            status.HTTP_409_CONFLICT, f"Ya existe un producto con el SKU {manual}"
-        )
+    campos = datos.model_dump()
 
     # Si dos cajeros crean productos a la vez pueden calcular el mismo
     # consecutivo. El UNIQUE de la base rechaza al segundo y aqui se reintenta.
     for _ in range(5):
-        sku = manual or _siguiente_sku(db, categoria)
-        producto = Producto(**campos, sku=sku, activo=True)
+        producto = Producto(**campos, sku=_siguiente_sku(db, categoria), activo=True)
         db.add(producto)
         try:
             db.commit()
         except IntegrityError:
             db.rollback()
-            if manual:
-                raise HTTPException(
-                    status.HTTP_409_CONFLICT,
-                    f"Ya existe un producto con el SKU {manual}",
-                )
             continue
         db.refresh(producto)
         return producto
@@ -158,18 +150,6 @@ def actualizar(
         # estar impreso en etiquetas o usado por un proveedor.
     if "unidad_medida" in cambios:
         _validar_unidad(cambios["unidad_medida"])
-    if "sku" in cambios:
-        cambios["sku"] = cambios["sku"].strip().upper()
-        repetido = db.scalar(
-            select(Producto).where(
-                Producto.sku == cambios["sku"], Producto.id != producto_id
-            )
-        )
-        if repetido is not None:
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                f"Ya existe otro producto con el SKU {cambios['sku']}",
-            )
 
     for campo, valor in cambios.items():
         setattr(producto, campo, valor)
@@ -188,15 +168,31 @@ def ajustar_stock(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(usuario_actual),
 ):
-    """Ajuste manual de inventario. El kardex se conectara aqui mas adelante."""
+    """Ajuste manual de inventario. Queda registrado en el kardex."""
+    if cantidad == 0:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "La cantidad no puede ser 0")
+
     producto = _buscar(db, producto_id)
-    nuevo = producto.stock_actual + cantidad
+    anterior = producto.stock_actual
+    nuevo = anterior + cantidad
     if nuevo < 0:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            f"No hay stock suficiente. Disponible: {producto.stock_actual}",
+            f"No hay stock suficiente. Disponible: {anterior}",
         )
+
     producto.stock_actual = nuevo
+    db.add(
+        MovimientoInventario(
+            producto_id=producto.id,
+            tipo="AJUSTE",
+            cantidad=Decimal(abs(cantidad)),
+            stock_anterior=anterior,
+            stock_resultante=nuevo,
+            usuario_id=usuario.id,
+            motivo=f"Ajuste manual de {cantidad:+d} desde la pantalla de productos",
+        )
+    )
     db.commit()
     db.refresh(producto)
     return producto

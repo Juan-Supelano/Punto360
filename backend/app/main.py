@@ -2,8 +2,28 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.models import Categoria, Comercio, Producto, Usuario  # noqa: F401
-from app.routers import auth, categorias, productos
+from app.models import (  # noqa: F401
+    Categoria,
+    Cliente,
+    Comercio,
+    Compra,
+    CompraItem,
+    MovimientoInventario,
+    Producto,
+    Proveedor,
+    Usuario,
+    Venta,
+    VentaItem,
+)
+from app.routers import (
+    auth,
+    categorias,
+    clientes,
+    compras,
+    productos,
+    proveedores,
+    ventas,
+)
 
 # Ojo: aqui NO se llama Base.metadata.create_all().
 # El esquema de proyecto_nube lo administra el script SQL del equipo (y mas
@@ -31,6 +51,10 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(categorias.router)
 app.include_router(productos.router)
+app.include_router(proveedores.router)
+app.include_router(compras.router)
+app.include_router(clientes.router)
+app.include_router(ventas.router)
 
 
 @app.get("/", tags=["Estado"])

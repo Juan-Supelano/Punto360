@@ -29,10 +29,9 @@ export default function Productos() {
   const [editandoId, setEditandoId] = useState(null)
   const [panelAbierto, setPanelAbierto] = useState(false)
 
-  // El SKU lo arma el backend con el prefijo de la categoría.
-  // skuPrevio es solo la vista previa; skuManual deja escribirlo a mano.
+  // El SKU lo arma siempre el backend con el prefijo de la categoría.
+  // skuPrevio es solo la vista previa de lo que se va a asignar.
   const [skuPrevio, setSkuPrevio] = useState('')
-  const [skuManual, setSkuManual] = useState(false)
 
   const [error, setError] = useState('')
   const [cargando, setCargando] = useState(true)
@@ -111,7 +110,6 @@ export default function Productos() {
     setFormulario({ ...VACIO, categoria_id: String(categoriasActivas[0].id) })
     setEditandoId(null)
     setSkuPrevio('')
-    setSkuManual(false)
     setPanelAbierto(true)
     setError('')
   }
@@ -131,7 +129,6 @@ export default function Productos() {
     })
     setEditandoId(p.id)
     setSkuPrevio('')
-    setSkuManual(false)
     setPanelAbierto(true)
     setError('')
   }
@@ -141,7 +138,6 @@ export default function Productos() {
     setEditandoId(null)
     setFormulario(VACIO)
     setSkuPrevio('')
-    setSkuManual(false)
   }
 
   async function guardar(evento) {
@@ -158,10 +154,7 @@ export default function Productos() {
       categoria_id: Number(formulario.categoria_id),
     }
 
-    // Solo se manda el SKU si el usuario lo escribió a mano.
-    if (skuManual && formulario.sku.trim()) {
-      datos.sku = formulario.sku.trim().toUpperCase()
-    }
+    // El SKU nunca se manda: lo genera el backend con el prefijo de la categoría.
 
     try {
       if (editandoId) {
@@ -388,61 +381,17 @@ export default function Productos() {
                 <span>SKU</span>
                 <input
                   className="mono-entrada"
-                  readOnly={!skuManual}
-                  required={skuManual}
-                  maxLength={40}
-                  value={
-                    skuManual
-                      ? formulario.sku
-                      : editandoId
-                        ? formulario.sku
-                        : skuPrevio || '—'
-                  }
-                  onChange={(e) =>
-                    setFormulario({
-                      ...formulario,
-                      sku: e.target.value.toUpperCase(),
-                    })
-                  }
+                  readOnly
+                  tabIndex={-1}
+                  value={editandoId ? formulario.sku : skuPrevio || '—'}
+                  onChange={() => {}}
                 />
                 <small className="sutil">
-                  {skuManual ? (
-                    <>
-                      Manual.{' '}
-                      <button
-                        type="button"
-                        className="btn-texto"
-                        onClick={() => {
-                          setSkuManual(false)
-                          setFormulario((f) => ({ ...f, sku: '' }))
-                        }}
-                      >
-                        volver al automático
-                      </button>
-                    </>
-                  ) : editandoId ? (
-                    <>
-                      No se cambia al mover de categoría.{' '}
-                      <button
-                        type="button"
-                        className="btn-texto"
-                        onClick={() => setSkuManual(true)}
-                      >
-                        editar
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      Automático{categoriaElegida ? ` (${categoriaElegida.prefijo_sku})` : ''}.{' '}
-                      <button
-                        type="button"
-                        className="btn-texto"
-                        onClick={() => setSkuManual(true)}
-                      >
-                        escribirlo a mano
-                      </button>
-                    </>
-                  )}
+                  {editandoId
+                    ? 'Asignado al crearlo. No cambia al mover de categoría.'
+                    : `Se asigna solo${
+                        categoriaElegida ? ` con el prefijo ${categoriaElegida.prefijo_sku}` : ''
+                      }.`}
                 </small>
               </label>
 

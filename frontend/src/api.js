@@ -96,6 +96,71 @@ export const api = {
     pedir(`/productos/${id}/stock?cantidad=${cantidad}`, { method: 'PATCH' }),
   desactivarProducto: (id) => pedir(`/productos/${id}`, { method: 'DELETE' }),
   reactivarProducto: (id) => pedir(`/productos/${id}/reactivar`, { method: 'POST' }),
+
+  // --- Proveedores (solo ADMIN) ---------------------------------------------
+  listarProveedores: ({ buscar, incluirInactivos } = {}) => {
+    const p = new URLSearchParams()
+    if (buscar) p.set('buscar', buscar)
+    if (incluirInactivos) p.set('incluir_inactivos', 'true')
+    const cadena = p.toString()
+    return pedir(cadena ? `/proveedores?${cadena}` : '/proveedores')
+  },
+  crearProveedor: (datos) => pedir('/proveedores', { method: 'POST', ...cuerpo(datos) }),
+  actualizarProveedor: (id, datos) =>
+    pedir(`/proveedores/${id}`, { method: 'PUT', ...cuerpo(datos) }),
+  desactivarProveedor: (id) => pedir(`/proveedores/${id}`, { method: 'DELETE' }),
+  reactivarProveedor: (id) => pedir(`/proveedores/${id}/reactivar`, { method: 'POST' }),
+
+  // --- Compras (solo ADMIN) -------------------------------------------------
+  listarCompras: ({ proveedorId, estado, desde, hasta } = {}) => {
+    const p = new URLSearchParams()
+    if (proveedorId) p.set('proveedor_id', proveedorId)
+    if (estado) p.set('estado', estado)
+    if (desde) p.set('desde', desde)
+    if (hasta) p.set('hasta', hasta)
+    const cadena = p.toString()
+    return pedir(cadena ? `/compras?${cadena}` : '/compras')
+  },
+  verCompra: (id) => pedir(`/compras/${id}`),
+  crearCompra: (datos) => pedir('/compras', { method: 'POST', ...cuerpo(datos) }),
+  anularCompra: (id, motivo) =>
+    pedir(`/compras/${id}/anular`, { method: 'POST', ...cuerpo({ motivo }) }),
+
+  // --- Clientes -------------------------------------------------------------
+  listarClientes: (buscar) =>
+    pedir(buscar ? `/clientes?buscar=${encodeURIComponent(buscar)}` : '/clientes'),
+  crearCliente: (datos) => pedir('/clientes', { method: 'POST', ...cuerpo(datos) }),
+
+  // --- Ventas ---------------------------------------------------------------
+  // El cajero registra; el admin consulta. El backend filtra por rol:
+  // un cajero solo recibe sus propias ventas aunque pida las de otro.
+  listarVentas: ({ usuarioId, estado, desde, hasta } = {}) => {
+    const p = new URLSearchParams()
+    if (usuarioId) p.set('usuario_id', usuarioId)
+    if (estado) p.set('estado', estado)
+    if (desde) p.set('desde', desde)
+    if (hasta) p.set('hasta', hasta)
+    const cadena = p.toString()
+    return pedir(cadena ? `/ventas?${cadena}` : '/ventas')
+  },
+  resumenVentas: ({ desde, hasta } = {}) => {
+    const p = new URLSearchParams()
+    if (desde) p.set('desde', desde)
+    if (hasta) p.set('hasta', hasta)
+    const cadena = p.toString()
+    return pedir(cadena ? `/ventas/resumen?${cadena}` : '/ventas/resumen')
+  },
+  ventasPorCajero: ({ desde, hasta } = {}) => {
+    const p = new URLSearchParams()
+    if (desde) p.set('desde', desde)
+    if (hasta) p.set('hasta', hasta)
+    const cadena = p.toString()
+    return pedir(cadena ? `/ventas/por-cajero?${cadena}` : '/ventas/por-cajero')
+  },
+  verVenta: (id) => pedir(`/ventas/${id}`),
+  crearVenta: (datos) => pedir('/ventas', { method: 'POST', ...cuerpo(datos) }),
+  anularVenta: (id, motivo) =>
+    pedir(`/ventas/${id}/anular`, { method: 'POST', ...cuerpo({ motivo }) }),
 }
 
 export const pesos = new Intl.NumberFormat('es-CO', {

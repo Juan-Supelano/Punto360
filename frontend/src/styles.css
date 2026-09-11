@@ -458,6 +458,244 @@ tbody tr:hover {
   margin-left: 6px;
 }
 
+.etiqueta.verde {
+  background: var(--ok-suave);
+  color: var(--ok);
+}
+
+/* --- Compras: líneas de la factura ---------------------------------------- */
+.modal-ancho {
+  width: min(940px, 100%);
+}
+
+.lineas-compra {
+  margin-top: 22px;
+  border-top: 1px solid var(--borde);
+  padding-top: 16px;
+}
+
+.lineas-titulo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.tabla-lineas {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tabla-lineas th {
+  background: none;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--borde);
+}
+
+.tabla-lineas td {
+  padding: 8px;
+  border-bottom: 1px solid var(--borde);
+  vertical-align: top;
+}
+
+.tabla-lineas tr:hover {
+  background: none;
+}
+
+.tabla-lineas input {
+  text-align: right;
+}
+
+.tabla-lineas td:nth-child(2) input {
+  text-align: center;
+}
+
+.totales {
+  display: flex;
+  justify-content: flex-end;
+  gap: 28px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--borde);
+  text-align: right;
+}
+
+.totales > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.total-grande strong {
+  font-size: 19px;
+}
+
+/* --- Punto de venta -------------------------------------------------------- */
+.pos {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 20px;
+  align-items: start;
+}
+
+.pos-buscador {
+  position: relative;
+  margin-bottom: 14px;
+}
+
+.pos-buscador input {
+  font-size: 16px;
+  padding: 12px 14px;
+}
+
+.sugerencias {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  position: absolute;
+  z-index: 10;
+  width: 100%;
+  background: var(--superficie);
+  border: 1px solid var(--borde-fuerte);
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(16, 24, 40, 0.14);
+  overflow: hidden;
+}
+
+.sugerencia {
+  display: grid;
+  grid-template-columns: 96px 1fr auto auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--borde);
+  padding: 9px 12px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sugerencia:hover:not(:disabled),
+.sugerencia.primera {
+  background: #eef4fe;
+}
+
+.sugerencia:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.sug-nombre {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sug-stock {
+  font-size: 12px;
+  color: var(--texto-sutil);
+  white-space: nowrap;
+}
+
+.cantidad-pos {
+  width: 58px;
+  text-align: center;
+}
+
+.pos-cobro {
+  position: sticky;
+  top: 28px;
+}
+
+.pos-cobro .tarjeta {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 0;
+}
+
+.cobro-totales {
+  border-top: 1px solid var(--borde);
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cobro-totales > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.cobro-total {
+  border-top: 1px solid var(--borde);
+  padding-top: 8px;
+  margin-top: 4px;
+  font-size: 17px;
+}
+
+.cobro-total strong {
+  font-size: 22px;
+}
+
+.cobro-cambio strong {
+  color: var(--ok);
+}
+
+.cobro-cambio.falta strong {
+  color: var(--peligro);
+}
+
+.btn-cobrar {
+  padding: 12px;
+  font-size: 15px;
+}
+
+.modal-angosto {
+  width: min(400px, 100%);
+}
+
+.recibo-cabeza {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.recibo-cabeza h3 {
+  margin: 8px 0 2px;
+  font-family: 'Cascadia Mono', Consolas, monospace;
+}
+
+.campo-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.campo-inline input {
+  width: auto;
+}
+
+.panel-cajeros {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 1100px) {
+  .pos {
+    grid-template-columns: 1fr;
+  }
+
+  .pos-cobro {
+    position: static;
+  }
+}
+
 .control-stock {
   display: inline-flex;
   align-items: center;
