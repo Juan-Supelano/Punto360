@@ -108,6 +108,18 @@ def solo_admin(usuario: Usuario = Depends(usuario_actual)) -> Usuario:
     return usuario
 
 
+def requerir_password_actualizada(usuario: Usuario = Depends(usuario_actual)) -> Usuario:
+    """Dependencia para los routers de negocio normales: si la contrasena
+    sigue siendo la temporal que puso un ADMIN, bloquea todo excepto el
+    propio perfil (para cambiarla) y auth (para el login)."""
+    if usuario.debe_cambiar_password:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Debes cambiar tu contrasena temporal antes de continuar",
+        )
+    return usuario
+
+
 def solo_cajero(usuario: Usuario = Depends(usuario_actual)) -> Usuario:
     """Quien vende es el cajero. El administrador consulta, no factura:
     asi las ventas siempre tienen un responsable de mostrador identificable."""

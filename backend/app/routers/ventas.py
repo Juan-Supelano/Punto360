@@ -15,12 +15,12 @@ from app.models import (
     VentaItem,
 )
 from app.schemas.venta import VentaAnular, VentaCrear, VentaLeer, VentaListada
-from app.seguridad import solo_admin, solo_cajero, usuario_actual
+from app.seguridad import requerir_password_actualizada, solo_admin, solo_cajero, usuario_actual
 
 router = APIRouter(
     prefix="/ventas",
     tags=["Ventas"],
-    dependencies=[Depends(usuario_actual)],
+    dependencies=[Depends(requerir_password_actualizada)],
 )
 
 CENTAVO = Decimal("0.01")

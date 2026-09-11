@@ -28,6 +28,15 @@ class Usuario(Base):
     )
     ultimo_acceso: Mapped[datetime | None] = mapped_column(DateTime)
 
+    # Foto de perfil: hoy es una ruta bajo /static/fotos, mañana puede ser una
+    # URL de Cloud Storage. El resto del código solo ve una URL.
+    foto_url: Mapped[str | None] = mapped_column(String)
+    # true mientras la contraseña sea temporal (recien creada o reseteada por
+    # un ADMIN). Bloquea el resto de la API hasta que el usuario la cambie.
+    debe_cambiar_password: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+
     # Relación agregada por la migración 001: el usuario trabaja en esta empresa.
     comercio_id: Mapped[int] = mapped_column(
         ForeignKey("configuracion_comercio.id"), nullable=False

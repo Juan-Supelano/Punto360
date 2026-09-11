@@ -9,12 +9,12 @@ from app.database import get_db
 from app.models import Categoria, MovimientoInventario, Producto, Usuario
 from app.models.producto import UNIDADES
 from app.schemas.producto import ProductoActualizar, ProductoCrear, ProductoLeer
-from app.seguridad import usuario_actual
+from app.seguridad import requerir_password_actualizada, usuario_actual
 
 router = APIRouter(
     prefix="/productos",
     tags=["Productos"],
-    dependencies=[Depends(usuario_actual)],
+    dependencies=[Depends(requerir_password_actualizada)],
 )
 
 

@@ -37,9 +37,16 @@ export function ProveedorAuth({ children }) {
     setUsuario((u) => (u ? { ...u, comercio } : u))
   }
 
+  // Tras editar el perfil o cambiar la contraseña, el backend devuelve el
+  // usuario actualizado (incluido debe_cambiar_password); esto lo refleja
+  // en la sesión sin tener que volver a llamar a /auth/yo.
+  function refrescarUsuario(datos) {
+    setUsuario((u) => (u ? { ...u, ...datos } : u))
+  }
+
   return (
     <Contexto.Provider
-      value={{ usuario, verificando, entrar, salir, refrescarComercio }}
+      value={{ usuario, verificando, entrar, salir, refrescarComercio, refrescarUsuario }}
     >
       {children}
     </Contexto.Provider>

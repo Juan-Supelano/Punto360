@@ -16,14 +16,14 @@ from app.models import (
     Usuario,
 )
 from app.schemas.compra import CompraAnular, CompraCrear, CompraLeer, CompraListada
-from app.seguridad import solo_admin, usuario_actual
+from app.seguridad import requerir_password_actualizada, solo_admin
 
 # Consultar compras: cualquiera con sesion, tambien el cajero.
 # Registrar y anular: solo ADMIN (se declara en cada endpoint).
 router = APIRouter(
     prefix="/compras",
     tags=["Compras"],
-    dependencies=[Depends(usuario_actual)],
+    dependencies=[Depends(requerir_password_actualizada)],
 )
 
 CENTAVO = Decimal("0.01")

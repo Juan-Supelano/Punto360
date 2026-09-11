@@ -5,14 +5,14 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Cliente, Usuario
 from app.schemas.cliente import ClienteActualizar, ClienteCrear, ClienteLeer
-from app.seguridad import solo_admin, usuario_actual
+from app.seguridad import requerir_password_actualizada, solo_admin
 
 # Leer y crear: cualquiera con sesion (el cajero necesita registrar al cliente
 # en el mostrador). Editar y desactivar: solo ADMIN.
 router = APIRouter(
     prefix="/clientes",
     tags=["Clientes"],
-    dependencies=[Depends(usuario_actual)],
+    dependencies=[Depends(requerir_password_actualizada)],
 )
 
 

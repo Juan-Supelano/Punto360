@@ -37,6 +37,9 @@ export default function Usuarios() {
   const [error, setError] = useState('')
   const [cargando, setCargando] = useState(true)
 
+  const [reseteando, setReseteando] = useState(null) // id del usuario en proceso
+  const [passwordTemporal, setPasswordTemporal] = useState(null) // { email, password_temporal }
+
   useEffect(() => {
     const t = setTimeout(() => setBusqueda(texto), 300)
     return () => clearTimeout(t)
@@ -133,6 +136,23 @@ export default function Usuarios() {
     }
   }
 
+  async function resetearPassword(u) {
+    if (!window.confirm(`¿Resetear la contraseña de ${u.nombre}? La contraseña actual dejará de funcionar.`)) {
+      return
+    }
+    setReseteando(u.id)
+    setError('')
+    try {
+      const resultado = await api.resetearPasswordUsuario(u.id)
+      setPasswordTemporal(resultado)
+      cargar()
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setReseteando(null)
+    }
+  }
+
   if (!esAdmin) {
     return (
       <section>
@@ -201,6 +221,11 @@ export default function Usuarios() {
                     <strong>{u.nombre}</strong>
                     {u.id === usuario.id && <span className="etiqueta gris">tú</span>}
                     {!u.activo && <span className="etiqueta gris">inactivo</span>}
+                    {u.debe_cambiar_password && (
+                      <span className="etiqueta gris" title="Todavía no cambió su contraseña temporal">
+                        clave pendiente
+                      </span>
+                    )}
                   </td>
                   <td className="sutil">{u.email}</td>
                   <td>
@@ -212,6 +237,13 @@ export default function Usuarios() {
                   <td className="derecha acciones">
                     <button className="btn btn-suave" onClick={() => abrirEdicion(u)}>
                       Editar
+                    </button>
+                    <button
+                      className="btn btn-suave"
+                      disabled={reseteando === u.id}
+                      onClick={() => resetearPassword(u)}
+                    >
+                      {reseteando === u.id ? 'Reseteando…' : 'Resetear contraseña'}
                     </button>
                     <button
                       className={u.activo ? 'btn btn-peligro' : 'btn btn-suave'}
@@ -314,6 +346,42 @@ export default function Usuarios() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {passwordTemporal && (
+        <div className="fondo-modal" onClick={() => setPasswordTemporal(null)}>
+          <div className="modal modal-angosto" onClick={(e) => e.stopPropagation()}>
+            <h3>Contraseña temporal generada</h3>
+
+            <p className="sutil">
+              Para <strong>{passwordTemporal.email}</strong>. Cópiala y compártela con el
+              usuario ahora: no se va a volver a mostrar.
+            </p>
+
+            <div className="aviso aviso-advertencia">
+              <strong style={{ fontSize: 18, letterSpacing: '0.05em' }}>
+                {passwordTemporal.password_temporal}
+              </strong>
+            </div>
+
+            <div className="modal-pie">
+              <button
+                type="button"
+                className="btn btn-suave"
+                onClick={() => navigator.clipboard?.writeText(passwordTemporal.password_temporal)}
+              >
+                Copiar
+              </button>
+              <button
+                type="button"
+                className="btn btn-primario"
+                onClick={() => setPasswordTemporal(null)}
+              >
+                Listo
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </section>

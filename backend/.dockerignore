@@ -1,0 +1,11 @@
+.venv
+__pycache__
+*.pyc
+.env
+.git
+.gitignore
+*.sql
+*.md
+inspeccionar_bd.py
+usuarios.py
+seed.py

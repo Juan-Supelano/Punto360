@@ -1,6 +1,8 @@
 // Un solo lugar donde vive la direccion de la API.
 // Al desplegar en la nube solo se cambia el valor en el archivo .env
-const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+// Se exporta porque las paginas la necesitan para armar URLs de archivos
+// estaticos (por ejemplo, foto_url que el backend devuelve como ruta relativa).
+export const BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 const LLAVE_TOKEN = 'cuadre_pos_token'
 
@@ -42,6 +44,51 @@ async function pedir(ruta, opciones = {}) {
         mensaje = cuerpo.detail
       } else if (Array.isArray(cuerpo.detail)) {
         // Errores de validación de Pydantic.
+        mensaje = cuerpo.detail
+          .map((d) => `${d.loc?.slice(1).join('.')}: ${d.msg}`)
+          .join(' · ')
+      }
+    } catch {
+      // la respuesta no traía JSON
+    }
+    throw new Error(mensaje)
+  }
+
+  return respuesta.status === 204 ? null : respuesta.json()
+}
+
+// Igual que `pedir`, pero para subir archivos: el navegador arma el
+// Content-Type multipart/form-data con el boundary correcto solo si nosotros
+// NO lo fijamos a mano.
+async function pedirFormData(ruta, formData) {
+  const token = sesion.leer()
+  const cabeceras = {}
+  if (token) cabeceras.Authorization = `Bearer ${token}`
+
+  let respuesta
+  try {
+    respuesta = await fetch(`${BASE}${ruta}`, {
+      method: 'POST',
+      headers: cabeceras,
+      body: formData,
+    })
+  } catch {
+    throw new Error('No se pudo conectar con la API. ¿Está corriendo uvicorn?')
+  }
+
+  if (respuesta.status === 401) {
+    sesion.borrar()
+    alExpirar()
+    throw new Error('La sesión expiró. Vuelve a iniciar sesión.')
+  }
+
+  if (!respuesta.ok) {
+    let mensaje = `Error ${respuesta.status}`
+    try {
+      const cuerpo = await respuesta.json()
+      if (typeof cuerpo.detail === 'string') {
+        mensaje = cuerpo.detail
+      } else if (Array.isArray(cuerpo.detail)) {
         mensaje = cuerpo.detail
           .map((d) => `${d.loc?.slice(1).join('.')}: ${d.msg}`)
           .join(' · ')
@@ -175,6 +222,27 @@ export const api = {
     pedir(`/usuarios/${id}`, { method: 'PUT', ...cuerpo(datos) }),
   desactivarUsuario: (id) => pedir(`/usuarios/${id}`, { method: 'DELETE' }),
   reactivarUsuario: (id) => pedir(`/usuarios/${id}/reactivar`, { method: 'POST' }),
+  resetearPasswordUsuario: (id) =>
+    pedir(`/usuarios/${id}/resetear-password`, { method: 'POST' }),
+
+  // --- Perfil propio ----------------------------------------------------------
+  verPerfil: () => pedir('/perfil/yo'),
+  actualizarPerfil: (datos) => pedir('/perfil/yo', { method: 'PUT', ...cuerpo(datos) }),
+  subirFotoPerfil: (archivo) => {
+    const formData = new FormData()
+    formData.append('archivo', archivo)
+    return pedirFormData('/perfil/foto', formData)
+  },
+  cambiarPassword: (datos) =>
+    pedir('/perfil/cambiar-password', { method: 'POST', ...cuerpo(datos) }),
+}
+
+// foto_url llega como ruta relativa ("/static/fotos/...") cuando la sirve
+// este mismo backend, o como URL completa si el dia de manana se migra a
+// Cloud Storage. Esta funcion sirve para los dos casos.
+export const urlFoto = (fotoUrl) => {
+  if (!fotoUrl) return null
+  return fotoUrl.startsWith('http') ? fotoUrl : `${BASE}${fotoUrl}`
 }
 
 export const pesos = new Intl.NumberFormat('es-CO', {

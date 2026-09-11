@@ -39,6 +39,8 @@ class UsuarioLeer(BaseModel):
     nombre: str
     rol: str
     activo: bool
+    foto_url: str | None
+    debe_cambiar_password: bool
     ultimo_acceso: datetime | None
     comercio: ComercioLeer
 

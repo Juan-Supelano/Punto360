@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
+from app.almacenamiento import CARPETA_ESTATICOS, CARPETA_FOTOS
 from app.config import settings
 from app.models import (  # noqa: F401
     Categoria,
@@ -20,11 +22,16 @@ from app.routers import (
     categorias,
     clientes,
     compras,
+    perfil,
     productos,
     proveedores,
     usuarios,
     ventas,
 )
+
+# Debe existir antes de montar StaticFiles, aunque este vacia (por ejemplo en
+# un contenedor recien construido que todavia no recibio ninguna foto).
+CARPETA_FOTOS.mkdir(parents=True, exist_ok=True)
 
 # Ojo: aqui NO se llama Base.metadata.create_all().
 # El esquema de proyecto_nube lo administra el script SQL del equipo (y mas
@@ -49,6 +56,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.mount("/static", StaticFiles(directory=CARPETA_ESTATICOS), name="static")
+
 app.include_router(auth.router)
 app.include_router(categorias.router)
 app.include_router(productos.router)
@@ -57,6 +66,7 @@ app.include_router(compras.router)
 app.include_router(clientes.router)
 app.include_router(ventas.router)
 app.include_router(usuarios.router)
+app.include_router(perfil.router)
 
 
 @app.get("/", tags=["Estado"])

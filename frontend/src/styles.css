@@ -190,6 +190,7 @@ h3 {
   font-size: 12px;
   font-weight: 600;
   flex-shrink: 0;
+  object-fit: cover;
 }
 
 .usuario-texto strong {

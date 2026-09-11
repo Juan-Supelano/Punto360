@@ -9,14 +9,14 @@ from app.schemas.proveedor import (
     ProveedorCrear,
     ProveedorLeer,
 )
-from app.seguridad import solo_admin, usuario_actual
+from app.seguridad import requerir_password_actualizada, solo_admin
 
 # Consultar proveedores: cualquiera con sesion, tambien el cajero.
 # Crear, editar y desactivar: solo ADMIN (se declara en cada endpoint).
 router = APIRouter(
     prefix="/proveedores",
     tags=["Proveedores"],
-    dependencies=[Depends(usuario_actual)],
+    dependencies=[Depends(requerir_password_actualizada)],
 )
 
 

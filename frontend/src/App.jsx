@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
+import { urlFoto } from './api.js'
 import { useAuth } from './auth.jsx'
+import CambiarPasswordObligatorio from './pages/CambiarPasswordObligatorio.jsx'
 import Categorias from './pages/Categorias.jsx'
 import Compras from './pages/Compras.jsx'
 import Empresa from './pages/Empresa.jsx'
 import Login from './pages/Login.jsx'
+import Perfil from './pages/Perfil.jsx'
 import Productos from './pages/Productos.jsx'
 import Proveedores from './pages/Proveedores.jsx'
 import Usuarios from './pages/Usuarios.jsx'
@@ -20,6 +23,7 @@ const VISTAS = [
   { clave: 'proveedores', titulo: 'Proveedores', icono: '⇄', rol: null },
   { clave: 'compras', titulo: 'Compras', icono: '↧', rol: null },
   { clave: 'usuarios', titulo: 'Usuarios', icono: '⨁', rol: 'ADMIN' },
+  { clave: 'perfil', titulo: 'Mi perfil', icono: '☺', rol: null },
   { clave: 'empresa', titulo: 'Mi empresa', icono: '⌂', rol: null },
 ]
 
@@ -58,7 +62,16 @@ export default function App() {
     return <Login />
   }
 
+  // Contraseña temporal (recien creada o reseteada por un ADMIN): se bloquea
+  // el resto de la app hasta que la cambie. El backend hace cumplir lo mismo
+  // en cada endpoint de negocio; esto solo evita que el usuario se quede
+  // "atascado" viendo pantallas que igual le van a rechazar las peticiones.
+  if (usuario.debe_cambiar_password) {
+    return <CambiarPasswordObligatorio />
+  }
+
   const comercio = usuario.comercio
+  const foto = urlFoto(usuario.foto_url)
   const activa = vista ?? inicial
 
   return (
@@ -95,7 +108,11 @@ export default function App() {
 
         <div className="lateral-pie">
           <div className="usuario-chip">
-            <div className="avatar">{iniciales(usuario.nombre)}</div>
+            {foto ? (
+              <img className="avatar" src={foto} alt="" />
+            ) : (
+              <div className="avatar">{iniciales(usuario.nombre)}</div>
+            )}
             <div className="usuario-texto">
               <strong>{usuario.nombre}</strong>
               <span className="sutil">{usuario.rol}</span>
@@ -115,6 +132,7 @@ export default function App() {
         {activa === 'proveedores' && <Proveedores />}
         {activa === 'compras' && <Compras />}
         {activa === 'usuarios' && esAdmin && <Usuarios />}
+        {activa === 'perfil' && <Perfil />}
         {activa === 'empresa' && <Empresa />}
       </main>
     </div>

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Categoria, Producto, Usuario
 from app.schemas.categoria import CategoriaActualizar, CategoriaCrear, CategoriaLeer
-from app.seguridad import solo_admin, usuario_actual
+from app.seguridad import requerir_password_actualizada, solo_admin
 
 router = APIRouter(
     prefix="/categorias",
@@ -13,7 +13,7 @@ router = APIRouter(
     # Cualquier usuario con sesion puede LEER las categorias.
     # Crear, editar, desactivar y reactivar exigen ADMIN: se declara por
     # endpoint mas abajo, para que /docs muestre cual pide que rol.
-    dependencies=[Depends(usuario_actual)],
+    dependencies=[Depends(requerir_password_actualizada)],
 )
 
 

@@ -1,15 +1,29 @@
 """CRUD de usuarios del comercio (cajeros y administradores). Reservado a ADMIN."""
 
+import secrets
+import string
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Usuario
-from app.schemas.usuario import UsuarioActualizar, UsuarioCrear, UsuarioOut
+from app.schemas.usuario import (
+    ResetPasswordOut,
+    UsuarioActualizar,
+    UsuarioCrear,
+    UsuarioOut,
+)
 from app.seguridad import hashear, solo_admin
 
 router = APIRouter(prefix="/usuarios", tags=["Usuarios"])
+
+ALFABETO_PASSWORD_TEMPORAL = string.ascii_letters + string.digits
+
+
+def _generar_password_temporal(longitud: int = 12) -> str:
+    return "".join(secrets.choice(ALFABETO_PASSWORD_TEMPORAL) for _ in range(longitud))
 
 
 def _buscar(db: Session, admin: Usuario, usuario_id: int) -> Usuario:
@@ -61,6 +75,9 @@ def crear(
         password_hash=hashear(datos.password),
         activo=True,
         comercio_id=admin.comercio_id,
+        # La contrasena que puso el ADMIN es temporal: se fuerza el cambio
+        # en el primer login (no hay recuperacion por correo).
+        debe_cambiar_password=True,
     )
     db.add(nuevo)
     db.commit()
@@ -129,3 +146,24 @@ def reactivar(
     db.commit()
     db.refresh(usuario)
     return usuario
+
+
+@router.post("/{usuario_id}/resetear-password", response_model=ResetPasswordOut)
+def resetear_password(
+    usuario_id: int,
+    db: Session = Depends(get_db),
+    admin: Usuario = Depends(solo_admin),
+):
+    """Solo ADMIN. Reemplaza cualquier flujo de "olvide mi contrasena": genera
+    una contrasena temporal, la guarda hasheada y la devuelve UNA SOLA VEZ
+    para que el ADMIN se la comunique al usuario fuera del sistema."""
+    usuario = _buscar(db, admin, usuario_id)
+
+    temporal = _generar_password_temporal()
+    usuario.password_hash = hashear(temporal)
+    usuario.debe_cambiar_password = True
+    db.commit()
+
+    return ResetPasswordOut(
+        usuario_id=usuario.id, email=usuario.email, password_temporal=temporal
+    )

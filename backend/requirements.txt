@@ -7,3 +7,4 @@ pydantic-settings>=2.7
 python-dotenv>=1.0
 PyJWT>=2.10
 bcrypt>=4.2
+python-multipart>=0.0.12
