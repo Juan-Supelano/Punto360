@@ -10,6 +10,7 @@ from app.models import Categoria, MovimientoInventario, Producto, Usuario
 from app.models.producto import UNIDADES
 from app.schemas.producto import ProductoActualizar, ProductoCrear, ProductoLeer
 from app.seguridad import requerir_password_actualizada, usuario_actual
+from app.texto import columna_plana, patron
 
 router = APIRouter(
     prefix="/productos",
@@ -82,9 +83,13 @@ def listar(
     if categoria_id is not None:
         consulta = consulta.where(Producto.categoria_id == categoria_id)
     if buscar:
-        patron = f"%{buscar}%"
+        # Busca ignorando tildes: "panaderia" encuentra "Panadería".
+        aguja = patron(buscar)
         consulta = consulta.where(
-            or_(Producto.nombre.ilike(patron), Producto.sku.ilike(patron))
+            or_(
+                columna_plana(Producto.nombre).like(aguja),
+                columna_plana(Producto.sku).like(aguja),
+            )
         )
     if solo_stock_bajo:
         consulta = consulta.where(Producto.stock_actual <= Producto.stock_minimo)

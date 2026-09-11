@@ -17,6 +17,14 @@ class CompraItemCrear(BaseModel):
 class CompraCrear(BaseModel):
     proveedor_id: int
     numero_factura: str = Field(min_length=1, max_length=40)
+    costo_incluye_iva: bool = Field(
+        default=False,
+        description=(
+            "true: el costo que facturo el proveedor ya trae IVA. Se guarda "
+            "la base sin impuesto, porque el IVA de compra es descontable y "
+            "no hace parte del valor del inventario."
+        ),
+    )
     items: list[CompraItemCrear] = Field(min_length=1)
 
 
@@ -44,6 +52,7 @@ class CompraLeer(BaseModel):
     subtotal: Decimal
     total_iva: Decimal
     total: Decimal
+    costo_incluye_iva: bool
     estado: str
     proveedor: ProveedorResumen
     items: list[CompraItemLeer]
@@ -60,5 +69,6 @@ class CompraListada(BaseModel):
     subtotal: Decimal
     total_iva: Decimal
     total: Decimal
+    costo_incluye_iva: bool
     estado: str
     proveedor: ProveedorResumen

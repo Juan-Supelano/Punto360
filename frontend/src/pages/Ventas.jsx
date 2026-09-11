@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, pesos } from '../api.js'
 import { useAuth } from '../auth.jsx'
+import Recibo, { imprimir } from '../Recibo.jsx'
 
 const fechaHora = new Intl.DateTimeFormat('es-CO', {
   day: '2-digit',
@@ -23,6 +24,7 @@ function hoyMenos(dias) {
 export default function Ventas() {
   const { usuario } = useAuth()
   const esAdmin = usuario?.rol === 'ADMIN'
+  const comercio = usuario?.comercio
 
   const [ventas, setVentas] = useState([])
   const [resumen, setResumen] = useState(null)
@@ -70,6 +72,18 @@ export default function Ventas() {
   async function verDetalle(id) {
     try {
       setDetalle(await api.verVenta(id))
+    } catch (e) {
+      setError(e.message)
+    }
+  }
+
+  // Reimprimir desde la tabla: trae el detalle completo (la lista no incluye
+  // las líneas) y lanza el diálogo cuando el recibo ya está en el DOM.
+  async function imprimirVenta(id) {
+    try {
+      const venta = await api.verVenta(id)
+      setDetalle(venta)
+      setTimeout(imprimir, 120)
     } catch (e) {
       setError(e.message)
     }
@@ -224,6 +238,13 @@ export default function Ventas() {
                     <button className="btn btn-suave" onClick={() => verDetalle(v.id)}>
                       Ver
                     </button>
+                    <button
+                      className="btn btn-suave"
+                      title="Abrir e imprimir el recibo"
+                      onClick={() => imprimirVenta(v.id)}
+                    >
+                      Imprimir
+                    </button>
                     {esAdmin && v.estado === 'PAGADA' && (
                       <button className="btn btn-peligro" onClick={() => anular(v)}>
                         Anular
@@ -324,11 +345,17 @@ export default function Ventas() {
                   Anular venta
                 </button>
               )}
+              <button className="btn btn-primario" onClick={imprimir}>
+                Imprimir
+              </button>
               <button className="btn btn-suave" onClick={() => setDetalle(null)}>
                 Cerrar
               </button>
             </div>
           </div>
+
+          {/* Oculto en pantalla: es lo único que sale al imprimir. */}
+          <Recibo venta={detalle} comercio={comercio} />
         </div>
       )}
     </section>

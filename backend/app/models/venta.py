@@ -5,6 +5,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     FetchedValue,
     ForeignKey,
@@ -45,6 +46,10 @@ class Venta(Base):
     total_iva: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     total: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     metodo_pago: Mapped[str] = mapped_column(String(20), nullable=False)
+    # Como se interpretaron los precios de esta factura. Se guarda con el
+    # documento y no se recalcula: una factura vieja debe seguir mostrando
+    # exactamente lo que se imprimio ese dia.
+    precio_incluye_iva: Mapped[bool] = mapped_column(Boolean, nullable=False)
     estado: Mapped[str] = mapped_column(String(10), nullable=False)
     observaciones: Mapped[str | None] = mapped_column(Text)
     anulada_en: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

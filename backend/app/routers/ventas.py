@@ -14,6 +14,7 @@ from app.models import (
     Venta,
     VentaItem,
 )
+from app.impuestos import desglosar
 from app.schemas.venta import VentaAnular, VentaCrear, VentaLeer, VentaListada
 from app.seguridad import requerir_password_actualizada, solo_admin, solo_cajero, usuario_actual
 
@@ -213,6 +214,7 @@ def crear(
         total_iva=Decimal("0"),
         total=Decimal("0"),
         metodo_pago=datos.metodo_pago,
+        precio_incluye_iva=datos.precio_incluye_iva,
         estado="PAGADA",
         observaciones=datos.observaciones,
         usuario_id=cajero.id,
@@ -225,10 +227,11 @@ def crear(
 
     for producto, cantidad in preparadas:
         # Precio e IVA se congelan: si manana cambian, esta venta no se mueve.
-        precio = Decimal(producto.precio_venta).quantize(CENTAVO)
+        precio = Decimal(producto.precio_venta)
         iva_pct = Decimal(producto.iva_pct)
-        sub_linea = (precio * cantidad).quantize(CENTAVO)
-        iva_linea = (sub_linea * iva_pct / Decimal("100")).quantize(CENTAVO)
+        sub_linea, iva_linea, total_linea = desglosar(
+            precio, cantidad, iva_pct, datos.precio_incluye_iva
+        )
 
         db.add(
             VentaItem(
@@ -239,7 +242,7 @@ def crear(
                 iva_pct=iva_pct,
                 subtotal_linea=sub_linea,
                 iva_linea=iva_linea,
-                total_linea=sub_linea + iva_linea,
+                total_linea=total_linea,
             )
         )
 

@@ -15,6 +15,7 @@ from app.models import (
     Proveedor,
     Usuario,
 )
+from app.impuestos import base_sin_iva, desglosar
 from app.schemas.compra import CompraAnular, CompraCrear, CompraLeer, CompraListada
 from app.seguridad import requerir_password_actualizada, solo_admin
 
@@ -118,6 +119,7 @@ def crear(
         subtotal=Decimal("0"),
         total_iva=Decimal("0"),
         total=Decimal("0"),
+        costo_incluye_iva=datos.costo_incluye_iva,
         estado="RECIBIDA",
     )
     db.add(compra)
@@ -139,10 +141,17 @@ def crear(
                 f"El producto {producto.sku} esta desactivado",
             )
 
-        costo = Decimal(linea.costo_unitario).quantize(CENTAVO)
-        subtotal_linea = (costo * linea.cantidad).quantize(CENTAVO)
-        iva_linea = (subtotal_linea * producto.iva_pct / Decimal("100")).quantize(
-            CENTAVO
+        costo_facturado = Decimal(linea.costo_unitario)
+        subtotal_linea, iva_linea, _total_linea = desglosar(
+            costo_facturado,
+            linea.cantidad,
+            Decimal(producto.iva_pct),
+            datos.costo_incluye_iva,
+        )
+        # El inventario se valora SIN IVA: ese impuesto es descontable y no
+        # hace parte de lo que vale la mercancia.
+        costo_limpio = base_sin_iva(
+            costo_facturado, Decimal(producto.iva_pct), datos.costo_incluye_iva
         )
 
         db.add(
@@ -150,7 +159,7 @@ def crear(
                 compra_id=compra.id,
                 producto_id=producto.id,
                 cantidad=Decimal(linea.cantidad),
-                costo_unitario=costo,
+                costo_unitario=costo_facturado,
                 subtotal_linea=subtotal_linea,
             )
         )
@@ -158,9 +167,10 @@ def crear(
         # Entrada de inventario + kardex.
         anterior = producto.stock_actual
         producto.stock_actual = anterior + linea.cantidad
-        # Costo del producto = ultimo costo de compra. Es lo habitual en un POS
-        # de mostrador; un promedio ponderado seria mas fino pero mas pesado.
-        producto.costo = costo
+        # Costo del producto = ultimo costo de compra, sin IVA. Es lo habitual
+        # en un POS de mostrador; un promedio ponderado seria mas fino pero mas
+        # pesado de mantener.
+        producto.costo = costo_limpio
 
         db.add(
             MovimientoInventario(

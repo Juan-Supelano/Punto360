@@ -10,6 +10,7 @@ from app.schemas.proveedor import (
     ProveedorLeer,
 )
 from app.seguridad import requerir_password_actualizada, solo_admin
+from app.texto import columna_plana, patron
 
 # Consultar proveedores: cualquiera con sesion, tambien el cajero.
 # Crear, editar y desactivar: solo ADMIN (se declara en cada endpoint).
@@ -49,9 +50,12 @@ def listar(
     if not incluir_inactivos:
         consulta = consulta.where(Proveedor.activo.is_(True))
     if buscar:
-        patron = f"%{buscar}%"
+        aguja = patron(buscar)
         consulta = consulta.where(
-            or_(Proveedor.nombre.ilike(patron), Proveedor.nit.ilike(patron))
+            or_(
+                columna_plana(Proveedor.nombre).like(aguja),
+                columna_plana(Proveedor.nit).like(aguja),
+            )
         )
     return db.scalars(consulta).all()
 

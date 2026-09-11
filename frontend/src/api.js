@@ -250,3 +250,25 @@ export const pesos = new Intl.NumberFormat('es-CO', {
   currency: 'COP',
   maximumFractionDigits: 0,
 })
+
+/**
+ * Mismo desglose de IVA que hace el backend, para la vista previa en pantalla.
+ *
+ * incluyeIva = true: el precio YA trae el impuesto y hay que sacarlo de
+ * adentro (1200 = 1008 de base + 192 de IVA).
+ * incluyeIva = false: el precio es la base y el IVA se suma encima.
+ *
+ * El IVA se obtiene restando, no multiplicando, para que subtotal + iva dé
+ * exactamente el total y la factura no se descuadre por un peso.
+ */
+export function desglosarIva(precio, cantidad, ivaPct, incluyeIva) {
+  const bruto = Math.round(Number(precio) * Number(cantidad) * 100) / 100
+  const tasa = Number(ivaPct) / 100
+
+  if (incluyeIva) {
+    const subtotal = Math.round((bruto / (1 + tasa)) * 100) / 100
+    return { subtotal, iva: bruto - subtotal, total: bruto }
+  }
+  const iva = Math.round(bruto * tasa * 100) / 100
+  return { subtotal: bruto, iva, total: bruto + iva }
+}

@@ -30,6 +30,14 @@ class VentaCrear(BaseModel):
 
     cliente_id: int | None = None
     metodo_pago: str = Field(default="EFECTIVO")
+    precio_incluye_iva: bool = Field(
+        default=True,
+        description=(
+            "true: el precio del producto ya trae el IVA y la factura lo "
+            "desglosa (1200 = 1008 base + 192 IVA). "
+            "false: el precio es la base y el IVA se suma encima (1200 -> 1428)."
+        ),
+    )
     observaciones: str | None = None
     items: list[VentaItemCrear] = Field(min_length=1)
 
@@ -72,6 +80,7 @@ class VentaLeer(BaseModel):
     total_iva: Decimal
     total: Decimal
     metodo_pago: str
+    precio_incluye_iva: bool
     estado: str
     observaciones: str | None
     anulada_en: datetime | None
@@ -93,6 +102,7 @@ class VentaListada(BaseModel):
     total_iva: Decimal
     total: Decimal
     metodo_pago: str
+    precio_incluye_iva: bool
     estado: str
     cliente: ClienteResumen | None
     usuario: UsuarioResumen | None

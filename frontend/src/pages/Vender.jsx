@@ -1,9 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { api, pesos } from '../api.js'
+import { api, desglosarIva, pesos } from '../api.js'
+import { useAuth } from '../auth.jsx'
+import Recibo, { imprimir } from '../Recibo.jsx'
 
 const METODOS = ['EFECTIVO', 'TARJETA', 'TRANSFERENCIA', 'MIXTO']
 
+// Quita tildes y pasa a minúscula: en el mostrador nadie escribe "Panadería"
+// con tilde, y el cajero no tiene por qué adivinar cómo quedó guardado.
+function sinTildes(texto = '') {
+  return texto
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '') // marcas de acento que deja NFD
+    .toLowerCase()
+}
+
 export default function Vender() {
+  const { usuario } = useAuth()
+  const comercio = usuario?.comercio
+
   const [productos, setProductos] = useState([])
   const [clientes, setClientes] = useState([])
 
@@ -13,6 +27,9 @@ export default function Vender() {
   const [metodoPago, setMetodoPago] = useState('EFECTIVO')
   const [observaciones, setObservaciones] = useState('')
   const [recibido, setRecibido] = useState('')
+  // Marcado: el precio de lista ya trae el IVA y la factura lo desglosa.
+  // Es lo normal en mostrador, por eso arranca en true.
+  const [incluyeIva, setIncluyeIva] = useState(true)
 
   const [error, setError] = useState('')
   const [cobrando, setCobrando] = useState(false)
@@ -39,12 +56,12 @@ export default function Vender() {
 
   // --- Búsqueda de productos --------------------------------------------------
   const coincidencias = useMemo(() => {
-    const q = texto.trim().toLowerCase()
+    const q = sinTildes(texto.trim())
     if (!q) return []
+    // Se normalizan los dos lados: lo escrito y lo guardado.
     return productos
       .filter(
-        (p) =>
-          p.sku.toLowerCase().includes(q) || p.nombre.toLowerCase().includes(q),
+        (p) => sinTildes(p.sku).includes(q) || sinTildes(p.nombre).includes(q),
       )
       .slice(0, 8)
   }, [texto, productos])
@@ -110,13 +127,20 @@ export default function Vender() {
   const totales = useMemo(() => {
     let subtotal = 0
     let iva = 0
+    let total = 0
     for (const l of carrito) {
-      const sub = Number(l.producto.precio_venta) * l.cantidad
-      subtotal += sub
-      iva += (sub * Number(l.producto.iva_pct)) / 100
+      const d = desglosarIva(
+        l.producto.precio_venta,
+        l.cantidad,
+        l.producto.iva_pct,
+        incluyeIva,
+      )
+      subtotal += d.subtotal
+      iva += d.iva
+      total += d.total
     }
-    return { subtotal, iva, total: subtotal + iva }
-  }, [carrito])
+    return { subtotal, iva, total }
+  }, [carrito, incluyeIva])
 
   const cambio =
     metodoPago === 'EFECTIVO' && recibido !== ''
@@ -132,6 +156,7 @@ export default function Vender() {
       const venta = await api.crearVenta({
         cliente_id: clienteId ? Number(clienteId) : null,
         metodo_pago: metodoPago,
+        precio_incluye_iva: incluyeIva,
         observaciones: observaciones.trim() || null,
         items: carrito.map((l) => ({
           producto_id: l.producto.id,
@@ -220,7 +245,10 @@ export default function Vender() {
                     </td>
                     <td className="derecha">
                       {pesos.format(Number(l.producto.precio_venta))}
-                      <div className="sutil">IVA {Number(l.producto.iva_pct)}%</div>
+                      <div className="sutil">
+                        IVA {Number(l.producto.iva_pct)}%{' '}
+                        {incluyeIva ? 'incl.' : 'más'}
+                      </div>
                     </td>
                     <td className="centro">
                       <div className="control-stock">
@@ -251,7 +279,14 @@ export default function Vender() {
                     </td>
                     <td className="derecha">
                       <strong>
-                        {pesos.format(Number(l.producto.precio_venta) * l.cantidad)}
+                        {pesos.format(
+                          desglosarIva(
+                            l.producto.precio_venta,
+                            l.cantidad,
+                            l.producto.iva_pct,
+                            incluyeIva,
+                          ).total,
+                        )}
                       </strong>
                     </td>
                     <td className="derecha">
@@ -329,6 +364,22 @@ export default function Vender() {
                 onChange={(e) => setObservaciones(e.target.value)}
               />
             </label>
+
+            <div className="caja-iva">
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={incluyeIva}
+                  onChange={(e) => setIncluyeIva(e.target.checked)}
+                />
+                Los precios ya incluyen IVA
+              </label>
+              <p className="sutil">
+                {incluyeIva
+                  ? 'El cliente paga el precio de la etiqueta y la factura desglosa el impuesto por dentro.'
+                  : 'El precio es la base y el IVA se suma encima: el cliente paga más que la etiqueta.'}
+              </p>
+            </div>
 
             <div className="cobro-totales">
               <div>
@@ -421,6 +472,9 @@ export default function Vender() {
             </div>
 
             <div className="modal-pie">
+              <button className="btn btn-suave" onClick={imprimir}>
+                Imprimir
+              </button>
               <button
                 className="btn btn-primario"
                 onClick={() => {
@@ -432,6 +486,13 @@ export default function Vender() {
               </button>
             </div>
           </div>
+
+          {/* Oculto en pantalla: es lo único que sale al imprimir. */}
+          <Recibo
+            venta={comprobante.venta}
+            comercio={comercio}
+            recibido={comprobante.recibido}
+          />
         </div>
       )}
     </section>

@@ -697,6 +697,134 @@ tbody tr:hover {
   }
 }
 
+/* ==========================================================================
+   Recibo para impresora térmica de 80 mm
+   En pantalla no se ve; solo existe cuando el navegador imprime.
+   ========================================================================== */
+.caja-iva {
+  background: #f7f8fa;
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.caja-iva .check {
+  color: var(--texto);
+  font-weight: 600;
+}
+
+.caja-iva p {
+  margin: 6px 0 0;
+}
+
+.recibo-print {
+  display: none;
+}
+
+@media print {
+  /* Se oculta todo y se vuelve visible solo el ticket. Es la forma de imprimir
+     una parte de la página sin abrir otra ventana ni usar un iframe. */
+  body * {
+    visibility: hidden;
+  }
+
+  .recibo-print,
+  .recibo-print * {
+    visibility: visible;
+  }
+
+  .recibo-print {
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 72mm; /* 80 mm de papel menos los márgenes del cabezal */
+    padding: 0;
+    margin: 0;
+    color: #000;
+    background: #fff;
+    font-family: 'Cascadia Mono', Consolas, 'Courier New', monospace;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  @page {
+    size: 80mm auto; /* rollo continuo: alto automático */
+    margin: 3mm;
+  }
+
+  .rp-centro {
+    text-align: center;
+  }
+
+  .rp-titulo {
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .rp-logo {
+    max-width: 40mm;
+    max-height: 20mm;
+    margin-bottom: 3px;
+    /* Las térmicas son monocromáticas: se fuerza alto contraste. */
+    filter: grayscale(100%) contrast(200%);
+  }
+
+  .rp-linea {
+    border-top: 1px dashed #000;
+    margin: 5px 0;
+  }
+
+  .rp-fila {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .rp-total {
+    font-size: 14px;
+    margin-top: 3px;
+  }
+
+  .rp-tabla {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .rp-tabla td {
+    border: 0;
+    padding: 2px 0;
+    vertical-align: top;
+  }
+
+  .rp-producto {
+    padding-right: 6px;
+  }
+
+  .rp-derecha {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .rp-arriba {
+    vertical-align: top;
+  }
+
+  .rp-chico {
+    font-size: 10px;
+  }
+
+  .rp-anulada {
+    font-weight: 700;
+    font-size: 13px;
+  }
+
+  .rp-pie {
+    margin: 6px 0 3px;
+  }
+}
+
 .control-stock {
   display: inline-flex;
   align-items: center;
@@ -807,26 +935,6 @@ tbody tr:hover {
   background: var(--ok-suave);
   border-color: #bfe3cd;
   color: var(--ok);
-}
-
-.aviso-advertencia {
-  background: var(--alerta-suave);
-  border-color: #f0c68a;
-  color: var(--alerta);
-}
-
-.aviso-advertencia ul {
-  margin: 6px 0 0;
-  padding-left: 18px;
-}
-
-.aviso-advertencia li {
-  margin: 2px 0;
-}
-
-.rol-info {
-  display: block;
-  margin-top: 6px;
 }
 
 .nota {

@@ -6,6 +6,7 @@ from app.database import get_db
 from app.models import Cliente, Usuario
 from app.schemas.cliente import ClienteActualizar, ClienteCrear, ClienteLeer
 from app.seguridad import requerir_password_actualizada, solo_admin
+from app.texto import columna_plana, patron
 
 # Leer y crear: cualquiera con sesion (el cajero necesita registrar al cliente
 # en el mostrador). Editar y desactivar: solo ADMIN.
@@ -33,9 +34,12 @@ def listar(
     if not incluir_inactivos:
         consulta = consulta.where(Cliente.activo.is_(True))
     if buscar:
-        patron = f"%{buscar}%"
+        aguja = patron(buscar)
         consulta = consulta.where(
-            or_(Cliente.nombre.ilike(patron), Cliente.num_doc.ilike(patron))
+            or_(
+                columna_plana(Cliente.nombre).like(aguja),
+                columna_plana(Cliente.num_doc).like(aguja),
+            )
         )
     return db.scalars(consulta).all()
 

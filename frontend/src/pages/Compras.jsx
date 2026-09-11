@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { api, pesos } from '../api.js'
+import { api, desglosarIva, pesos } from '../api.js'
 import { useAuth } from '../auth.jsx'
 
 const fechaCorta = new Intl.DateTimeFormat('es-CO', {
@@ -28,6 +28,9 @@ export default function Compras() {
   const [proveedorId, setProveedorId] = useState('')
   const [numeroFactura, setNumeroFactura] = useState('')
   const [lineas, setLineas] = useState([])
+  // Sin marcar: el costo del proveedor es la base. Es lo más común entre
+  // empresas, por eso arranca en false.
+  const [costoIncluyeIva, setCostoIncluyeIva] = useState(false)
 
   const [detalle, setDetalle] = useState(null)
   const [error, setError] = useState('')
@@ -77,6 +80,7 @@ export default function Compras() {
     }
     setProveedorId(String(proveedores[0].id))
     setNumeroFactura('')
+    setCostoIncluyeIva(false)
     setLineas([{ producto_id: '', cantidad: '1', costo_unitario: '' }])
     setPanelAbierto(true)
     setError('')
@@ -115,15 +119,22 @@ export default function Compras() {
   const totales = useMemo(() => {
     let subtotal = 0
     let iva = 0
+    let total = 0
     for (const linea of lineas) {
       const producto = productos.find((p) => String(p.id) === String(linea.producto_id))
       if (!producto) continue
-      const sub = Number(linea.costo_unitario || 0) * Number(linea.cantidad || 0)
-      subtotal += sub
-      iva += (sub * Number(producto.iva_pct)) / 100
+      const d = desglosarIva(
+        linea.costo_unitario || 0,
+        linea.cantidad || 0,
+        producto.iva_pct,
+        costoIncluyeIva,
+      )
+      subtotal += d.subtotal
+      iva += d.iva
+      total += d.total
     }
-    return { subtotal, iva, total: subtotal + iva }
-  }, [lineas, productos])
+    return { subtotal, iva, total }
+  }, [lineas, productos, costoIncluyeIva])
 
   async function guardar(evento) {
     evento.preventDefault()
@@ -145,6 +156,7 @@ export default function Compras() {
       await api.crearCompra({
         proveedor_id: Number(proveedorId),
         numero_factura: numeroFactura.trim(),
+        costo_incluye_iva: costoIncluyeIva,
         items,
       })
       cerrarPanel()
@@ -340,6 +352,22 @@ export default function Compras() {
               </label>
             </div>
 
+            <div className="caja-iva">
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={costoIncluyeIva}
+                  onChange={(e) => setCostoIncluyeIva(e.target.checked)}
+                />
+                Los costos de esta factura ya incluyen IVA
+              </label>
+              <p className="sutil">
+                {costoIncluyeIva
+                  ? 'Se guardará la base sin impuesto: el IVA de compra es descontable y no hace parte del valor del inventario.'
+                  : 'El costo es la base y el IVA se calcula encima.'}
+              </p>
+            </div>
+
             <div className="lineas-compra">
               <div className="lineas-titulo">
                 <strong>Productos</strong>
@@ -363,8 +391,14 @@ export default function Compras() {
                     const producto = productos.find(
                       (p) => String(p.id) === String(linea.producto_id),
                     )
-                    const sub =
-                      Number(linea.costo_unitario || 0) * Number(linea.cantidad || 0)
+                    const sub = producto
+                      ? desglosarIva(
+                          linea.costo_unitario || 0,
+                          linea.cantidad || 0,
+                          producto.iva_pct,
+                          costoIncluyeIva,
+                        ).total
+                      : 0
                     return (
                       <tr key={i}>
                         <td>
