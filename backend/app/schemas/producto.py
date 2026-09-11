@@ -7,7 +7,9 @@ from app.schemas.categoria import CategoriaResumen
 
 
 class ProductoCrear(BaseModel):
-    sku: str = Field(min_length=1, max_length=40)
+    # Normalmente va vacio: el backend arma el SKU con el prefijo de la
+    # categoria. Solo se manda si hay que respetar un codigo de proveedor.
+    sku: str | None = Field(default=None, max_length=40)
     nombre: str = Field(min_length=1, max_length=150)
     descripcion: str | None = None
     precio_venta: Decimal = Field(ge=0)

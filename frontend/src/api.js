@@ -87,6 +87,8 @@ export const api = {
     const cadena = p.toString()
     return pedir(cadena ? `/productos?${cadena}` : '/productos')
   },
+  siguienteSku: (categoriaId) =>
+    pedir(`/productos/siguiente-sku?categoria_id=${categoriaId}`),
   crearProducto: (datos) => pedir('/productos', { method: 'POST', ...cuerpo(datos) }),
   actualizarProducto: (id, datos) =>
     pedir(`/productos/${id}`, { method: 'PUT', ...cuerpo(datos) }),

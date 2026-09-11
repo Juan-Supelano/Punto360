@@ -18,6 +18,8 @@ class Categoria(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     nombre: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
     descripcion: Mapped[str | None] = mapped_column(Text)
+    # Con este prefijo el backend arma los SKU: BEB -> BEB-001, BEB-002...
+    prefijo_sku: Mapped[str] = mapped_column(String(5), unique=True, nullable=False)
     # Nada se borra: se desactiva en vez de eliminar.
     activo: Mapped[bool] = mapped_column(Boolean, nullable=False)
     creado_en: Mapped[datetime] = mapped_column(

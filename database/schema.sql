@@ -5,7 +5,7 @@
 -- Dumped from database version 16.9
 -- Dumped by pg_dump version 16.9
 
--- Started on 2026-09-10 15:43:29
+-- Started on 2026-09-10 20:13:48
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -34,12 +34,12 @@ COPY public.caja_sesion (id, usuario_id, abierta_en, cerrada_en, base_inicial, t
 -- Data for Name: categoria; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
-COPY public.categoria (id, nombre, descripcion, activo, creado_en) FROM stdin;
-1	Bebidas	Gaseosas, aguas, jugos y bebidas energizantes	t	2026-09-10 01:00:58.293923-05
-2	Snacks y confitería	Paquetes, dulces y galletas	t	2026-09-10 01:00:58.293923-05
-3	Víveres	Productos de la canasta básica	t	2026-09-10 01:00:58.293923-05
-4	Aseo y hogar	Limpieza personal y del hogar	t	2026-09-10 01:00:58.293923-05
-5	Papelería	Útiles escolares y de oficina	t	2026-09-10 01:00:58.293923-05
+COPY public.categoria (id, nombre, descripcion, activo, creado_en, prefijo_sku) FROM stdin;
+1	Bebidas	Gaseosas, aguas, jugos y bebidas energizantes	t	2026-09-10 01:00:58.293923-05	BEB
+2	Snacks y confitería	Paquetes, dulces y galletas	t	2026-09-10 01:00:58.293923-05	SNK
+3	Víveres	Productos de la canasta básica	t	2026-09-10 01:00:58.293923-05	VIV
+4	Aseo y hogar	Limpieza personal y del hogar	t	2026-09-10 01:00:58.293923-05	ASE
+5	Papelería	Útiles escolares y de oficina	t	2026-09-10 01:00:58.293923-05	PAP
 \.
 
 
@@ -120,7 +120,6 @@ COPY public.producto (id, categoria_id, sku, nombre, descripcion, precio_venta, 
 11	2	SNK-004	Chocolatina con maní 40 g	\N	2200.00	1450.00	19.00	50	20	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
 12	2	SNK-005	Maní salado 100 g	\N	3100.00	2050.00	19.00	16	8	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
 13	2	SNK-006	Bombones surtidos	\N	350.00	210.00	19.00	200	60	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
-14	2	SNK-007	Ponqué individual	\N	2800.00	1900.00	19.00	6	10	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
 15	3	VIV-001	Arroz blanco 500 g	\N	3200.00	2400.00	0.00	45	15	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
 16	3	VIV-002	Panela cuadrada 500 g	\N	3800.00	2900.00	0.00	22	10	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
 17	3	VIV-003	Aceite de girasol 1 L	\N	12500.00	9800.00	5.00	18	6	LT	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
@@ -136,7 +135,8 @@ COPY public.producto (id, categoria_id, sku, nombre, descripcion, precio_venta, 
 29	5	PAP-001	Cuaderno cuadriculado 100 hojas	\N	5400.00	3900.00	19.00	24	10	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
 30	5	PAP-002	Bolígrafo negro	\N	1200.00	700.00	19.00	80	30	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 01:00:58.293923-05
 23	4	ASE-001	Jabón de tocador 110 g	\N	2700.00	1800.00	19.00	30	12	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 15:27:31.297032-05
-24	4	ASE-002	Papel higiénico x4 rollos	\N	7900.00	5900.00	19.00	28	10	PAQ	f	2026-09-10 01:00:58.293923-05	2026-09-10 15:27:34.683476-05
+24	4	ASE-002	Papel higiénico x4 rollos	\N	7900.00	5900.00	19.00	28	10	PAQ	t	2026-09-10 01:00:58.293923-05	2026-09-10 15:58:23.340315-05
+14	2	SNK-007	Ponqué individual	\N	2800.00	1900.00	19.00	8	10	UND	t	2026-09-10 01:00:58.293923-05	2026-09-10 19:22:43.945178-05
 \.
 
 
@@ -160,8 +160,8 @@ COPY public.proveedor (id, nit, nombre, contacto, telefono, email, activo, cread
 --
 
 COPY public.usuario (id, email, nombre, password_hash, rol, activo, creado_en, ultimo_acceso, comercio_id) FROM stdin;
-2	cajero@cuadrepos.co	Cajero demo	$2b$12$sJSDTp95vhDls5pshxIiNunh9JKcP.z4JisDOBF2DwhssEvAuDLlG	CAJERO	t	2026-09-10 01:00:58.293923-05	\N	1
-1	admin@cuadrepos.co	Administrador demo	$2b$12$1.M8rSma4qX1DZsrVjnNoet2A.yT.Z8cKEUZ7wPQSWoR8b/EX/nZu	ADMIN	t	2026-09-10 01:00:58.293923-05	2026-09-10 20:18:41.595383-05	1
+2	cajero@cuadrepos.co	Cajero demo	$2b$12$sJSDTp95vhDls5pshxIiNunh9JKcP.z4JisDOBF2DwhssEvAuDLlG	CAJERO	t	2026-09-10 01:00:58.293923-05	2026-09-11 01:10:43.42184-05	1
+1	admin@cuadrepos.co	Administrador demo	$2b$12$1.M8rSma4qX1DZsrVjnNoet2A.yT.Z8cKEUZ7wPQSWoR8b/EX/nZu	ADMIN	t	2026-09-10 01:00:58.293923-05	2026-09-11 01:11:51.48256-05	1
 \.
 
 
@@ -186,7 +186,7 @@ COPY public.venta_item (id, venta_id, producto_id, cantidad, precio_unitario, iv
 
 
 --
--- TOC entry 5166 (class 0 OID 0)
+-- TOC entry 5167 (class 0 OID 0)
 -- Dependencies: 238
 -- Name: caja_sesion_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
@@ -195,7 +195,7 @@ SELECT pg_catalog.setval('public.caja_sesion_id_seq', 1, false);
 
 
 --
--- TOC entry 5167 (class 0 OID 0)
+-- TOC entry 5168 (class 0 OID 0)
 -- Dependencies: 216
 -- Name: categoria_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
@@ -204,7 +204,7 @@ SELECT pg_catalog.setval('public.categoria_id_seq', 5, true);
 
 
 --
--- TOC entry 5168 (class 0 OID 0)
+-- TOC entry 5169 (class 0 OID 0)
 -- Dependencies: 220
 -- Name: cliente_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
@@ -213,7 +213,7 @@ SELECT pg_catalog.setval('public.cliente_id_seq', 6, true);
 
 
 --
--- TOC entry 5169 (class 0 OID 0)
+-- TOC entry 5170 (class 0 OID 0)
 -- Dependencies: 234
 -- Name: compra_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
@@ -222,7 +222,7 @@ SELECT pg_catalog.setval('public.compra_id_seq', 1, false);
 
 
 --
--- TOC entry 5170 (class 0 OID 0)
+-- TOC entry 5171 (class 0 OID 0)
 -- Dependencies: 236
 -- Name: compra_item_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
@@ -231,7 +231,7 @@ SELECT pg_catalog.setval('public.compra_item_id_seq', 1, false);
 
 
 --
--- TOC entry 5171 (class 0 OID 0)
+-- TOC entry 5172 (class 0 OID 0)
 -- Dependencies: 230
 -- Name: configuracion_comercio_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
@@ -240,7 +240,7 @@ SELECT pg_catalog.setval('public.configuracion_comercio_id_seq', 1, true);
 
 
 --
--- TOC entry 5172 (class 0 OID 0)
+-- TOC entry 5173 (class 0 OID 0)
 -- Dependencies: 228
 -- Name: movimiento_inventario_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
@@ -249,7 +249,7 @@ SELECT pg_catalog.setval('public.movimiento_inventario_id_seq', 1, false);
 
 
 --
--- TOC entry 5173 (class 0 OID 0)
+-- TOC entry 5174 (class 0 OID 0)
 -- Dependencies: 218
 -- Name: producto_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
@@ -258,7 +258,7 @@ SELECT pg_catalog.setval('public.producto_id_seq', 30, true);
 
 
 --
--- TOC entry 5174 (class 0 OID 0)
+-- TOC entry 5175 (class 0 OID 0)
 -- Dependencies: 232
 -- Name: proveedor_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
@@ -267,7 +267,7 @@ SELECT pg_catalog.setval('public.proveedor_id_seq', 3, true);
 
 
 --
--- TOC entry 5175 (class 0 OID 0)
+-- TOC entry 5176 (class 0 OID 0)
 -- Dependencies: 226
 -- Name: usuario_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
@@ -276,7 +276,7 @@ SELECT pg_catalog.setval('public.usuario_id_seq', 2, true);
 
 
 --
--- TOC entry 5176 (class 0 OID 0)
+-- TOC entry 5177 (class 0 OID 0)
 -- Dependencies: 222
 -- Name: venta_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
@@ -285,7 +285,7 @@ SELECT pg_catalog.setval('public.venta_id_seq', 1, false);
 
 
 --
--- TOC entry 5177 (class 0 OID 0)
+-- TOC entry 5178 (class 0 OID 0)
 -- Dependencies: 224
 -- Name: venta_item_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
@@ -294,7 +294,7 @@ SELECT pg_catalog.setval('public.venta_item_id_seq', 1, false);
 
 
 --
--- TOC entry 5178 (class 0 OID 0)
+-- TOC entry 5179 (class 0 OID 0)
 -- Dependencies: 215
 -- Name: venta_numero_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
@@ -302,7 +302,7 @@ SELECT pg_catalog.setval('public.venta_item_id_seq', 1, false);
 SELECT pg_catalog.setval('public.venta_numero_seq', 1, false);
 
 
--- Completed on 2026-09-10 15:43:30
+-- Completed on 2026-09-10 20:13:49
 
 --
 -- PostgreSQL database dump complete

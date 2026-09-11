@@ -29,6 +29,11 @@ export default function Productos() {
   const [editandoId, setEditandoId] = useState(null)
   const [panelAbierto, setPanelAbierto] = useState(false)
 
+  // El SKU lo arma el backend con el prefijo de la categoría.
+  // skuPrevio es solo la vista previa; skuManual deja escribirlo a mano.
+  const [skuPrevio, setSkuPrevio] = useState('')
+  const [skuManual, setSkuManual] = useState(false)
+
   const [error, setError] = useState('')
   const [cargando, setCargando] = useState(true)
 
@@ -64,6 +69,26 @@ export default function Productos() {
     cargar()
   }, [cargar])
 
+  // Al elegir categoría en el formulario de creación, pide la vista previa
+  // del SKU que se va a asignar.
+  useEffect(() => {
+    if (!panelAbierto || editandoId || !formulario.categoria_id) {
+      return
+    }
+    let vigente = true
+    api
+      .siguienteSku(formulario.categoria_id)
+      .then((r) => {
+        if (vigente) setSkuPrevio(r.sku)
+      })
+      .catch(() => {
+        if (vigente) setSkuPrevio('')
+      })
+    return () => {
+      vigente = false
+    }
+  }, [panelAbierto, editandoId, formulario.categoria_id])
+
   const resumen = useMemo(() => {
     const activos = productos.filter((p) => p.activo)
     return {
@@ -76,9 +101,17 @@ export default function Productos() {
     }
   }, [productos])
 
+  const categoriasActivas = categorias.filter((c) => c.activo)
+
   function abrirNuevo() {
-    setFormulario({ ...VACIO, categoria_id: categorias[0]?.id ?? '' })
+    if (categoriasActivas.length === 0) {
+      setError('Primero crea una categoría: de ahí sale el prefijo del SKU.')
+      return
+    }
+    setFormulario({ ...VACIO, categoria_id: String(categoriasActivas[0].id) })
     setEditandoId(null)
+    setSkuPrevio('')
+    setSkuManual(false)
     setPanelAbierto(true)
     setError('')
   }
@@ -97,6 +130,8 @@ export default function Productos() {
       categoria_id: String(p.categoria.id),
     })
     setEditandoId(p.id)
+    setSkuPrevio('')
+    setSkuManual(false)
     setPanelAbierto(true)
     setError('')
   }
@@ -105,12 +140,13 @@ export default function Productos() {
     setPanelAbierto(false)
     setEditandoId(null)
     setFormulario(VACIO)
+    setSkuPrevio('')
+    setSkuManual(false)
   }
 
   async function guardar(evento) {
     evento.preventDefault()
     const datos = {
-      sku: formulario.sku.trim(),
       nombre: formulario.nombre.trim(),
       descripcion: formulario.descripcion.trim() || null,
       precio_venta: Number(formulario.precio_venta),
@@ -121,6 +157,12 @@ export default function Productos() {
       unidad_medida: formulario.unidad_medida,
       categoria_id: Number(formulario.categoria_id),
     }
+
+    // Solo se manda el SKU si el usuario lo escribió a mano.
+    if (skuManual && formulario.sku.trim()) {
+      datos.sku = formulario.sku.trim().toUpperCase()
+    }
+
     try {
       if (editandoId) {
         await api.actualizarProducto(editandoId, datos)
@@ -160,6 +202,10 @@ export default function Productos() {
     value: formulario[nombre],
     onChange: (e) => setFormulario({ ...formulario, [nombre]: e.target.value }),
   })
+
+  const categoriaElegida = categorias.find(
+    (c) => String(c.id) === String(formulario.categoria_id),
+  )
 
   return (
     <section>
@@ -205,7 +251,7 @@ export default function Productos() {
           <option value="">Todas las categorías</option>
           {categorias.map((c) => (
             <option key={c.id} value={c.id}>
-              {c.nombre}
+              {c.nombre} ({c.prefijo_sku})
             </option>
           ))}
         </select>
@@ -326,12 +372,81 @@ export default function Productos() {
             <h3>{editandoId ? 'Editar producto' : 'Nuevo producto'}</h3>
 
             <div className="rejilla-form">
-              <label className="campo">
-                <span>SKU</span>
-                <input required maxLength={40} {...campo('sku')} />
+              <label className="campo campo-ancho">
+                <span>Categoría</span>
+                <select required {...campo('categoria_id')}>
+                  <option value="">Elige una categoría…</option>
+                  {categoriasActivas.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nombre} ({c.prefijo_sku})
+                    </option>
+                  ))}
+                </select>
               </label>
 
-              <label className="campo campo-ancho">
+              <label className="campo">
+                <span>SKU</span>
+                <input
+                  className="mono-entrada"
+                  readOnly={!skuManual}
+                  required={skuManual}
+                  maxLength={40}
+                  value={
+                    skuManual
+                      ? formulario.sku
+                      : editandoId
+                        ? formulario.sku
+                        : skuPrevio || '—'
+                  }
+                  onChange={(e) =>
+                    setFormulario({
+                      ...formulario,
+                      sku: e.target.value.toUpperCase(),
+                    })
+                  }
+                />
+                <small className="sutil">
+                  {skuManual ? (
+                    <>
+                      Manual.{' '}
+                      <button
+                        type="button"
+                        className="btn-texto"
+                        onClick={() => {
+                          setSkuManual(false)
+                          setFormulario((f) => ({ ...f, sku: '' }))
+                        }}
+                      >
+                        volver al automático
+                      </button>
+                    </>
+                  ) : editandoId ? (
+                    <>
+                      No se cambia al mover de categoría.{' '}
+                      <button
+                        type="button"
+                        className="btn-texto"
+                        onClick={() => setSkuManual(true)}
+                      >
+                        editar
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      Automático{categoriaElegida ? ` (${categoriaElegida.prefijo_sku})` : ''}.{' '}
+                      <button
+                        type="button"
+                        className="btn-texto"
+                        onClick={() => setSkuManual(true)}
+                      >
+                        escribirlo a mano
+                      </button>
+                    </>
+                  )}
+                </small>
+              </label>
+
+              <label className="campo campo-completo">
                 <span>Nombre</span>
                 <input required maxLength={150} {...campo('nombre')} />
               </label>
@@ -374,20 +489,6 @@ export default function Productos() {
                       {u}
                     </option>
                   ))}
-                </select>
-              </label>
-
-              <label className="campo campo-ancho">
-                <span>Categoría</span>
-                <select required {...campo('categoria_id')}>
-                  <option value="">Elige una categoría…</option>
-                  {categorias
-                    .filter((c) => c.activo)
-                    .map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.nombre}
-                      </option>
-                    ))}
                 </select>
               </label>
             </div>

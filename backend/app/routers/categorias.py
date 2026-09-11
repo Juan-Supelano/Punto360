@@ -3,13 +3,16 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Categoria, Producto
+from app.models import Categoria, Producto, Usuario
 from app.schemas.categoria import CategoriaActualizar, CategoriaCrear, CategoriaLeer
-from app.seguridad import usuario_actual
+from app.seguridad import solo_admin, usuario_actual
 
 router = APIRouter(
     prefix="/categorias",
     tags=["Categorias"],
+    # Cualquier usuario con sesion puede LEER las categorias.
+    # Crear, editar, desactivar y reactivar exigen ADMIN: se declara por
+    # endpoint mas abajo, para que /docs muestre cual pide que rol.
     dependencies=[Depends(usuario_actual)],
 )
 
@@ -19,6 +22,18 @@ def _buscar(db: Session, categoria_id: int) -> Categoria:
     if categoria is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Categoria no encontrada")
     return categoria
+
+
+def _validar_prefijo_libre(db: Session, prefijo: str, excepto_id: int | None = None):
+    consulta = select(Categoria).where(Categoria.prefijo_sku == prefijo)
+    if excepto_id is not None:
+        consulta = consulta.where(Categoria.id != excepto_id)
+    duenna = db.scalar(consulta)
+    if duenna is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"El prefijo {prefijo} ya lo usa la categoria '{duenna.nombre}'",
+        )
 
 
 @router.get("", response_model=list[CategoriaLeer])
@@ -35,7 +50,12 @@ def obtener(categoria_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=CategoriaLeer, status_code=status.HTTP_201_CREATED)
-def crear(datos: CategoriaCrear, db: Session = Depends(get_db)):
+def crear(
+    datos: CategoriaCrear,
+    db: Session = Depends(get_db),
+    admin: Usuario = Depends(solo_admin),
+):
+    """Solo ADMIN. El prefijo del SKU lo digita el administrador."""
     nombre = datos.nombre.strip()
     repetida = db.scalar(
         select(Categoria).where(func.lower(Categoria.nombre) == nombre.lower())
@@ -45,8 +65,13 @@ def crear(datos: CategoriaCrear, db: Session = Depends(get_db)):
             status.HTTP_409_CONFLICT, "Ya existe una categoria con ese nombre"
         )
 
+    _validar_prefijo_libre(db, datos.prefijo_sku)
+
     categoria = Categoria(
-        nombre=nombre, descripcion=datos.descripcion, activo=True
+        nombre=nombre,
+        descripcion=datos.descripcion,
+        prefijo_sku=datos.prefijo_sku,
+        activo=True,
     )
     db.add(categoria)
     db.commit()
@@ -56,8 +81,12 @@ def crear(datos: CategoriaCrear, db: Session = Depends(get_db)):
 
 @router.put("/{categoria_id}", response_model=CategoriaLeer)
 def actualizar(
-    categoria_id: int, datos: CategoriaActualizar, db: Session = Depends(get_db)
+    categoria_id: int,
+    datos: CategoriaActualizar,
+    db: Session = Depends(get_db),
+    admin: Usuario = Depends(solo_admin),
 ):
+    """Solo ADMIN."""
     categoria = _buscar(db, categoria_id)
     cambios = datos.model_dump(exclude_unset=True)
 
@@ -74,6 +103,11 @@ def actualizar(
                 status.HTTP_409_CONFLICT, "Ya existe otra categoria con ese nombre"
             )
 
+    if "prefijo_sku" in cambios and cambios["prefijo_sku"] != categoria.prefijo_sku:
+        _validar_prefijo_libre(db, cambios["prefijo_sku"], excepto_id=categoria_id)
+        # Los productos que ya existen conservan su SKU: cambiar el prefijo solo
+        # afecta a los que se creen de aqui en adelante.
+
     for campo, valor in cambios.items():
         setattr(categoria, campo, valor)
 
@@ -83,8 +117,12 @@ def actualizar(
 
 
 @router.delete("/{categoria_id}", response_model=CategoriaLeer)
-def desactivar(categoria_id: int, db: Session = Depends(get_db)):
-    """No borra: desactiva. Se bloquea si tiene productos activos colgando."""
+def desactivar(
+    categoria_id: int,
+    db: Session = Depends(get_db),
+    admin: Usuario = Depends(solo_admin),
+):
+    """Solo ADMIN. No borra: desactiva, y se bloquea si tiene productos activos."""
     categoria = _buscar(db, categoria_id)
 
     activos = db.scalar(
@@ -106,7 +144,12 @@ def desactivar(categoria_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{categoria_id}/reactivar", response_model=CategoriaLeer)
-def reactivar(categoria_id: int, db: Session = Depends(get_db)):
+def reactivar(
+    categoria_id: int,
+    db: Session = Depends(get_db),
+    admin: Usuario = Depends(solo_admin),
+):
+    """Solo ADMIN."""
     categoria = _buscar(db, categoria_id)
     categoria.activo = True
     db.commit()
