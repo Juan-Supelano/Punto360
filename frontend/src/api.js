@@ -161,6 +161,20 @@ export const api = {
   crearVenta: (datos) => pedir('/ventas', { method: 'POST', ...cuerpo(datos) }),
   anularVenta: (id, motivo) =>
     pedir(`/ventas/${id}/anular`, { method: 'POST', ...cuerpo({ motivo }) }),
+
+  // --- Usuarios (solo ADMIN) -------------------------------------------------
+  listarUsuarios: ({ buscar, incluirInactivos } = {}) => {
+    const p = new URLSearchParams()
+    if (buscar) p.set('buscar', buscar)
+    if (incluirInactivos) p.set('incluir_inactivos', 'true')
+    const cadena = p.toString()
+    return pedir(cadena ? `/usuarios?${cadena}` : '/usuarios')
+  },
+  crearUsuario: (datos) => pedir('/usuarios', { method: 'POST', ...cuerpo(datos) }),
+  actualizarUsuario: (id, datos) =>
+    pedir(`/usuarios/${id}`, { method: 'PUT', ...cuerpo(datos) }),
+  desactivarUsuario: (id) => pedir(`/usuarios/${id}`, { method: 'DELETE' }),
+  reactivarUsuario: (id) => pedir(`/usuarios/${id}/reactivar`, { method: 'POST' }),
 }
 
 export const pesos = new Intl.NumberFormat('es-CO', {

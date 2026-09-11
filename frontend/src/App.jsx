@@ -6,6 +6,7 @@ import Empresa from './pages/Empresa.jsx'
 import Login from './pages/Login.jsx'
 import Productos from './pages/Productos.jsx'
 import Proveedores from './pages/Proveedores.jsx'
+import Usuarios from './pages/Usuarios.jsx'
 import Vender from './pages/Vender.jsx'
 import Ventas from './pages/Ventas.jsx'
 
@@ -18,6 +19,7 @@ const VISTAS = [
   { clave: 'categorias', titulo: 'Categorías', icono: '☰', rol: null },
   { clave: 'proveedores', titulo: 'Proveedores', icono: '⇄', rol: null },
   { clave: 'compras', titulo: 'Compras', icono: '↧', rol: null },
+  { clave: 'usuarios', titulo: 'Usuarios', icono: '⨁', rol: 'ADMIN' },
   { clave: 'empresa', titulo: 'Mi empresa', icono: '⌂', rol: null },
 ]
 
@@ -112,6 +114,7 @@ export default function App() {
         {activa === 'categorias' && <Categorias />}
         {activa === 'proveedores' && <Proveedores />}
         {activa === 'compras' && <Compras />}
+        {activa === 'usuarios' && esAdmin && <Usuarios />}
         {activa === 'empresa' && <Empresa />}
       </main>
     </div>

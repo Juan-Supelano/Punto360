@@ -808,6 +808,26 @@ tbody tr:hover {
   color: var(--ok);
 }
 
+.aviso-advertencia {
+  background: var(--alerta-suave);
+  border-color: #f0c68a;
+  color: var(--alerta);
+}
+
+.aviso-advertencia ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.aviso-advertencia li {
+  margin: 2px 0;
+}
+
+.rol-info {
+  display: block;
+  margin-top: 6px;
+}
+
 .nota {
   font-size: 12.5px;
   color: var(--texto-sutil);
