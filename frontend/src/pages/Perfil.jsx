@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { api, urlFoto } from '../api.js'
 import { useAuth } from '../auth.jsx'
 
@@ -15,15 +15,12 @@ const CLAVE_VACIA = { password_actual: '', password_nueva: '', confirmar: '' }
 
 export default function Perfil() {
   const { usuario, refrescarUsuario } = useAuth()
-  const inputFotoRef = useRef(null)
 
   const [nombre, setNombre] = useState(usuario?.nombre || '')
+  const [fotoUrl, setFotoUrl] = useState(usuario?.foto_url || '')
   const [errorDatos, setErrorDatos] = useState('')
   const [guardadoDatos, setGuardadoDatos] = useState(false)
   const [guardandoDatos, setGuardandoDatos] = useState(false)
-
-  const [subiendoFoto, setSubiendoFoto] = useState(false)
-  const [errorFoto, setErrorFoto] = useState('')
 
   const [clave, setClave] = useState(CLAVE_VACIA)
   const [errorClave, setErrorClave] = useState('')
@@ -36,29 +33,16 @@ export default function Perfil() {
     setGuardadoDatos(false)
     setGuardandoDatos(true)
     try {
-      const actualizado = await api.actualizarPerfil({ nombre: nombre.trim() })
+      const actualizado = await api.actualizarPerfil({
+        nombre: nombre.trim(),
+        foto_url: fotoUrl.trim() || null,
+      })
       refrescarUsuario(actualizado)
       setGuardadoDatos(true)
     } catch (e) {
       setErrorDatos(e.message)
     } finally {
       setGuardandoDatos(false)
-    }
-  }
-
-  async function subirFoto(evento) {
-    const archivo = evento.target.files?.[0]
-    if (!archivo) return
-    setErrorFoto('')
-    setSubiendoFoto(true)
-    try {
-      const actualizado = await api.subirFotoPerfil(archivo)
-      refrescarUsuario(actualizado)
-    } catch (e) {
-      setErrorFoto(e.message)
-    } finally {
-      setSubiendoFoto(false)
-      if (inputFotoRef.current) inputFotoRef.current.value = ''
     }
   }
 
@@ -90,8 +74,6 @@ export default function Perfil() {
 
   if (!usuario) return null
 
-  const foto = urlFoto(usuario.foto_url)
-
   return (
     <section>
       <div className="titulo-vista">
@@ -116,6 +98,17 @@ export default function Perfil() {
                 maxLength={120}
                 value={nombre}
                 onChange={(e) => setNombre(e.target.value)}
+              />
+            </label>
+
+            <label className="campo campo-completo">
+              <span>URL de la foto</span>
+              <input
+                type="url"
+                maxLength={500}
+                placeholder="https://…"
+                value={fotoUrl}
+                onChange={(e) => setFotoUrl(e.target.value)}
               />
             </label>
 
@@ -195,8 +188,8 @@ export default function Perfil() {
         <aside className="tarjeta vista-previa">
           <span className="dato-etiqueta">Foto de perfil</span>
           <div className="previa-marca">
-            {foto ? (
-              <img src={foto} alt="" />
+            {fotoUrl ? (
+              <img src={urlFoto(fotoUrl)} alt="" />
             ) : (
               <div className="previa-sinlogo">{iniciales(usuario.nombre) || '?'}</div>
             )}
@@ -206,17 +199,9 @@ export default function Perfil() {
             </div>
           </div>
 
-          {errorFoto && <p className="aviso aviso-error">{errorFoto}</p>}
-
-          <input
-            ref={inputFotoRef}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            onChange={subirFoto}
-            disabled={subiendoFoto}
-          />
           <p className="nota">
-            {subiendoFoto ? 'Subiendo…' : 'JPG, PNG o WEBP, máximo 5 MB.'}
+            La foto se guarda como URL, no como archivo. Sube la imagen al bucket de
+            Cloud Storage y pega aquí su dirección pública.
           </p>
         </aside>
       </div>

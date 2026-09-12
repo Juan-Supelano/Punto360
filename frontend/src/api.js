@@ -57,51 +57,6 @@ async function pedir(ruta, opciones = {}) {
   return respuesta.status === 204 ? null : respuesta.json()
 }
 
-// Igual que `pedir`, pero para subir archivos: el navegador arma el
-// Content-Type multipart/form-data con el boundary correcto solo si nosotros
-// NO lo fijamos a mano.
-async function pedirFormData(ruta, formData) {
-  const token = sesion.leer()
-  const cabeceras = {}
-  if (token) cabeceras.Authorization = `Bearer ${token}`
-
-  let respuesta
-  try {
-    respuesta = await fetch(`${BASE}${ruta}`, {
-      method: 'POST',
-      headers: cabeceras,
-      body: formData,
-    })
-  } catch {
-    throw new Error('No se pudo conectar con la API. ¿Está corriendo uvicorn?')
-  }
-
-  if (respuesta.status === 401) {
-    sesion.borrar()
-    alExpirar()
-    throw new Error('La sesión expiró. Vuelve a iniciar sesión.')
-  }
-
-  if (!respuesta.ok) {
-    let mensaje = `Error ${respuesta.status}`
-    try {
-      const cuerpo = await respuesta.json()
-      if (typeof cuerpo.detail === 'string') {
-        mensaje = cuerpo.detail
-      } else if (Array.isArray(cuerpo.detail)) {
-        mensaje = cuerpo.detail
-          .map((d) => `${d.loc?.slice(1).join('.')}: ${d.msg}`)
-          .join(' · ')
-      }
-    } catch {
-      // la respuesta no traía JSON
-    }
-    throw new Error(mensaje)
-  }
-
-  return respuesta.status === 204 ? null : respuesta.json()
-}
-
 const cuerpo = (datos) => ({ body: JSON.stringify(datos) })
 
 export const api = {
@@ -173,10 +128,20 @@ export const api = {
   anularCompra: (id, motivo) =>
     pedir(`/compras/${id}/anular`, { method: 'POST', ...cuerpo({ motivo }) }),
 
-  // --- Clientes -------------------------------------------------------------
-  listarClientes: (buscar) =>
-    pedir(buscar ? `/clientes?buscar=${encodeURIComponent(buscar)}` : '/clientes'),
+  // --- Clientes (ADMIN y CAJERO) ---------------------------------------------
+  listarClientes: ({ buscar, incluirInactivos } = {}) => {
+    const p = new URLSearchParams()
+    if (buscar) p.set('buscar', buscar)
+    if (incluirInactivos) p.set('incluir_inactivos', 'true')
+    const cadena = p.toString()
+    return pedir(cadena ? `/clientes?${cadena}` : '/clientes')
+  },
+  verCliente: (id) => pedir(`/clientes/${id}`),
   crearCliente: (datos) => pedir('/clientes', { method: 'POST', ...cuerpo(datos) }),
+  actualizarCliente: (id, datos) =>
+    pedir(`/clientes/${id}`, { method: 'PUT', ...cuerpo(datos) }),
+  desactivarCliente: (id) => pedir(`/clientes/${id}`, { method: 'DELETE' }),
+  reactivarCliente: (id) => pedir(`/clientes/${id}/reactivar`, { method: 'POST' }),
 
   // --- Ventas ---------------------------------------------------------------
   // El cajero registra; el admin consulta. El backend filtra por rol:
@@ -228,11 +193,6 @@ export const api = {
   // --- Perfil propio ----------------------------------------------------------
   verPerfil: () => pedir('/perfil/yo'),
   actualizarPerfil: (datos) => pedir('/perfil/yo', { method: 'PUT', ...cuerpo(datos) }),
-  subirFotoPerfil: (archivo) => {
-    const formData = new FormData()
-    formData.append('archivo', archivo)
-    return pedirFormData('/perfil/foto', formData)
-  },
   cambiarPassword: (datos) =>
     pedir('/perfil/cambiar-password', { method: 'POST', ...cuerpo(datos) }),
 }

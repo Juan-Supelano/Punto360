@@ -3,6 +3,7 @@ import { urlFoto } from './api.js'
 import { useAuth } from './auth.jsx'
 import CambiarPasswordObligatorio from './pages/CambiarPasswordObligatorio.jsx'
 import Categorias from './pages/Categorias.jsx'
+import Clientes from './pages/Clientes.jsx'
 import Compras from './pages/Compras.jsx'
 import Empresa from './pages/Empresa.jsx'
 import Login from './pages/Login.jsx'
@@ -22,6 +23,7 @@ const VISTAS = [
   { clave: 'categorias', titulo: 'Categorías', icono: '☰', rol: null },
   { clave: 'proveedores', titulo: 'Proveedores', icono: '⇄', rol: null },
   { clave: 'compras', titulo: 'Compras', icono: '↧', rol: null },
+  { clave: 'clientes', titulo: 'Clientes', icono: '☻', rol: null },
   { clave: 'usuarios', titulo: 'Usuarios', icono: '⨁', rol: 'ADMIN' },
   { clave: 'perfil', titulo: 'Mi perfil', icono: '☺', rol: null },
   { clave: 'empresa', titulo: 'Mi empresa', icono: '⌂', rol: null },
@@ -131,6 +133,7 @@ export default function App() {
         {activa === 'categorias' && <Categorias />}
         {activa === 'proveedores' && <Proveedores />}
         {activa === 'compras' && <Compras />}
+        {activa === 'clientes' && <Clientes />}
         {activa === 'usuarios' && esAdmin && <Usuarios />}
         {activa === 'perfil' && <Perfil />}
         {activa === 'empresa' && <Empresa />}

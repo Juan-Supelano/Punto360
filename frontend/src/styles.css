@@ -1042,20 +1042,19 @@ tbody tr:hover {
 }
 
 .login-logo {
-  width: 52px;
-  height: 52px;
-  border-radius: 12px;
-  background: var(--primario);
-  color: #fff;
-  display: grid;
-  place-items: center;
-  font-weight: 700;
-  font-size: 18px;
-  margin: 0 auto 12px;
+  display: block;
+  width: 104px;
+  height: 104px;
+  object-fit: contain;
+  margin: auto;
 }
 
-.login-marca h1 {
-  font-size: 21px;
+.login-isotipo {
+  display: block;
+  max-width: 220px;
+  width: 100%;
+  height: auto;
+  margin: 0 auto;
 }
 
 .login-marca p {

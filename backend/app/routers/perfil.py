@@ -4,10 +4,9 @@ ADMIN, gestiona a cualquiera), aqui cada usuario ve y edita SUS propios datos.
 Usa `usuario_actual` (no `requerir_password_actualizada`): con contrasena
 temporal el usuario debe poder entrar aqui a cambiarla."""
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.almacenamiento import guardar_foto_perfil
 from app.database import get_db
 from app.models import Usuario
 from app.schemas.usuario import CambiarPassword, PerfilActualizar, PerfilOut
@@ -27,19 +26,11 @@ def actualizar_perfil(
     db: Session = Depends(get_db),
     usuario: Usuario = Depends(usuario_actual),
 ):
+    """La foto se guarda como URL (igual que el logo de la empresa): el
+    usuario sube la imagen a donde sea (por ejemplo Cloud Storage) y pega
+    aqui su direccion publica."""
     usuario.nombre = datos.nombre.strip()
-    db.commit()
-    db.refresh(usuario)
-    return usuario
-
-
-@router.post("/foto", response_model=PerfilOut)
-def subir_foto(
-    archivo: UploadFile,
-    db: Session = Depends(get_db),
-    usuario: Usuario = Depends(usuario_actual),
-):
-    usuario.foto_url = guardar_foto_perfil(usuario.id, archivo)
+    usuario.foto_url = datos.foto_url.strip() if datos.foto_url else None
     db.commit()
     db.refresh(usuario)
     return usuario

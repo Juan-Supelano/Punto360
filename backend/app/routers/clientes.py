@@ -3,13 +3,13 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Cliente, Usuario
+from app.models import Cliente
 from app.schemas.cliente import ClienteActualizar, ClienteCrear, ClienteLeer
-from app.seguridad import requerir_password_actualizada, solo_admin
+from app.seguridad import requerir_password_actualizada
 from app.texto import columna_plana, patron
 
-# Leer y crear: cualquiera con sesion (el cajero necesita registrar al cliente
-# en el mostrador). Editar y desactivar: solo ADMIN.
+# CRUD completo (crear, listar, consultar, editar, desactivar) para cualquiera
+# con sesion: tanto ADMIN como CAJERO gestionan clientes desde el mostrador.
 router = APIRouter(
     prefix="/clientes",
     tags=["Clientes"],
@@ -78,9 +78,7 @@ def actualizar(
     cliente_id: int,
     datos: ClienteActualizar,
     db: Session = Depends(get_db),
-    admin: Usuario = Depends(solo_admin),
 ):
-    """Solo ADMIN."""
     cliente = _buscar(db, cliente_id)
     for campo, valor in datos.model_dump(exclude_unset=True).items():
         setattr(cliente, campo, valor)
@@ -90,14 +88,19 @@ def actualizar(
 
 
 @router.delete("/{cliente_id}", response_model=ClienteLeer)
-def desactivar(
-    cliente_id: int,
-    db: Session = Depends(get_db),
-    admin: Usuario = Depends(solo_admin),
-):
-    """Solo ADMIN. No borra: desactiva, para no romper las ventas ya hechas."""
+def desactivar(cliente_id: int, db: Session = Depends(get_db)):
+    """No borra: desactiva, para no romper las ventas ya hechas."""
     cliente = _buscar(db, cliente_id)
     cliente.activo = False
+    db.commit()
+    db.refresh(cliente)
+    return cliente
+
+
+@router.post("/{cliente_id}/reactivar", response_model=ClienteLeer)
+def reactivar(cliente_id: int, db: Session = Depends(get_db)):
+    cliente = _buscar(db, cliente_id)
+    cliente.activo = True
     db.commit()
     db.refresh(cliente)
     return cliente

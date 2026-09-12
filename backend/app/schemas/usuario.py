@@ -67,10 +67,11 @@ class PerfilOut(BaseModel):
 
 
 class PerfilActualizar(BaseModel):
-    """Un usuario solo puede editar su propio nombre: ni el correo ni el rol
-    se cambian desde el perfil."""
+    """Un usuario solo puede editar su propio nombre y foto: ni el correo ni
+    el rol se cambian desde el perfil."""
 
     nombre: str = Field(min_length=1, max_length=120)
+    foto_url: str | None = Field(default=None, max_length=500)
 
 
 class CambiarPassword(BaseModel):

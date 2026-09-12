@@ -25,8 +25,16 @@ export default function Login() {
     <div className="login-pantalla">
       <form className="login-caja" onSubmit={enviar}>
         <div className="login-marca">
-          <div className="login-logo" aria-hidden="true">CP</div>
-          <h1>Cuadre POS</h1>
+          <img
+            className="login-logo"
+            src="/img/logo-punto360.png"
+            alt="Punto360"
+          />
+          <img
+            className="login-isotipo"
+            src="/img/isotipo-punto360.png"
+            alt="Punto360"
+          />
           <p>Punto de venta e inventario</p>
         </div>
 
