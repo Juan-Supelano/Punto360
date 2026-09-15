@@ -1,79 +1,242 @@
-# Cuadre POS
+# Cuadre POS (Punto360)
 
-Actividad integradora — Desarrollo de aplicaciones en la nube.
-API REST en FastAPI + frontend en React, con PostgreSQL.
-
-```
-cuadre-pos/
-├── backend/          la API (Python)
-│   ├── app/
-│   │   ├── main.py       arranque de la aplicación
-│   │   ├── config.py     lee el archivo .env
-│   │   ├── database.py   conexión a PostgreSQL
-│   │   ├── models/       las tablas
-│   │   ├── schemas/      qué entra y qué sale de la API
-│   │   └── routers/      las rutas (/productos, /categorias)
-│   ├── seed.py       carga datos de ejemplo
-│   └── requirements.txt
-└── frontend/         las pantallas (React)
-    └── src/
-        ├── api.js        único sitio donde vive la dirección de la API
-        └── pages/        Productos.jsx y Categorias.jsx
-```
+Sistema de punto de venta (POS) para la gestión de productos, inventario, ventas, compras, clientes y proveedores, mediante una API REST y una interfaz web.
 
 ---
 
-## 1. Crear la base de datos
+## Descripción
 
-En pgAdmin: clic derecho sobre **Databases → Create → Database…**
-Nombre: `cuadre_pos`. Guardar.
+Cuadre POS es un sistema pensado para llevar el control completo del punto de venta de un negocio: desde el catálogo de productos hasta el registro de ventas, compras e inventario.
 
-## 2. Poner la contraseña
+- **Qué es**: una aplicación web compuesta por una API (backend) y una interfaz de usuario (frontend) que permiten administrar el catálogo, las ventas, las compras, el inventario y los usuarios de un punto de venta.
+- **Qué problema busca solucionar**: la necesidad de tener organizada y centralizada la información de productos, ventas, compras, clientes y proveedores, evitando duplicados, precios inválidos, datos inconsistentes o pérdida de control sobre el stock.
+- **Enfoque**: cubre el flujo completo de un punto de venta: administrar el catálogo, cobrar, descontar inventario, emitir un comprobante y registrar quién hizo cada operación.
+- **Para quién está pensado**: pequeños y medianos negocios que necesitan un punto de venta con control de inventario y usuarios, y también sirve como base de aprendizaje para quienes estén estudiando desarrollo de aplicaciones en la nube.
 
-Abrir `backend/.env` y reemplazar `TU_CONTRASENA` por la contraseña que pusiste
-al instalar PostgreSQL.
+> Este proyecto nació como una actividad integradora de un curso de desarrollo de aplicaciones en la nube.
 
-## 3. Encender la API
+---
 
-Necesitas Python 3.11 o superior y Node 18 o superior.
-En una terminal (PowerShell), dentro de `backend`:
+## Funcionalidades
 
-```powershell
+### Catálogo
+
+| Funcionalidad | ¿Qué le permite hacer al usuario? |
+|---|---|
+| **Gestión de categorías** | Crear, ver, actualizar y desactivar categorías para organizar los productos del negocio. |
+| **Gestión de productos** | Crear, ver, actualizar y desactivar productos, asociando cada uno a una categoría. |
+| **Búsqueda y filtrado de productos** | Buscar productos por nombre y filtrarlos por categoría, para encontrar rápidamente lo que se necesita. |
+| **Desactivación en lugar de borrado** | Al "eliminar" un producto o categoría, este no se borra de la base de datos: se marca como inactivo, conservando el historial de información. |
+| **Validaciones automáticas** | El sistema evita datos inconsistentes: no permite códigos de producto repetidos, nombres de categoría repetidos, precios menores o iguales a cero, ni asociar un producto a una categoría inexistente. |
+| **Documentación interactiva de la API** | La API expone documentación automática (Swagger) donde se pueden probar todos los endpoints disponibles. |
+
+### Ventas, compras e inventario
+
+| Funcionalidad | ¿Qué le permite hacer al usuario? |
+|---|---|
+| **Registro de ventas** | Cobrar productos en el mostrador: elige productos y cantidades, calcula el total, descuenta el stock y registra la venta como una sola transacción (si algo falla, no se guarda nada a medias). |
+| **Cálculo y desglose de IVA** | Cada venta y compra calcula automáticamente el subtotal, el IVA y el total por línea, soportando precios con IVA incluido o excluido, con redondeo comercial para que los valores siempre cuadren. |
+| **Comprobante de venta imprimible** | Genera un recibo/ticket (pensado para impresora térmica de 80 mm) con los datos del comercio, el detalle de productos, impuestos y el vuelto, útil como comprobante para el cliente. |
+| **Numeración de ventas** | Cada venta recibe automáticamente un número consecutivo de comprobante, generado por la base de datos. |
+| **Anulación de ventas y compras** | Permite anular una venta o compra sin borrarla: el sistema devuelve el stock automáticamente y deja registrado el motivo de la anulación. |
+| **Registro de compras a proveedores** | Registrar la entrada de mercancía asociada a un proveedor y a su número de factura, actualizando el stock y el costo del producto. |
+| **Kardex de inventario** | Lleva un historial (movimiento por movimiento) de cada entrada, salida, venta, compra o anulación de stock, con el valor anterior y el resultante. |
+| **Gestión de clientes y proveedores** | Registrar, buscar, editar y desactivar clientes y proveedores, con validación de documento/NIT único. |
+
+### Usuarios y configuración del negocio
+
+| Funcionalidad | ¿Qué le permite hacer al usuario? |
+|---|---|
+| **Autenticación y roles de usuario** | Inicio de sesión con usuario y contraseña (token JWT). Existen dos roles: **ADMIN** (gestiona el negocio, usuarios y compras) y **CAJERO** (solo puede registrar ventas). |
+| **Gestión de usuarios** | El ADMIN puede crear, editar, desactivar y resetear la contraseña de otros usuarios del sistema. |
+| **Perfil y datos del comercio** | Cada usuario puede editar su propio perfil (nombre, foto), y el ADMIN puede configurar los datos del negocio (razón social, NIT, logo, resolución) que aparecen en el comprobante de venta. |
+
+---
+
+## ¿Por qué utilizar este proyecto?
+
+- **Organización de la información**: centraliza productos, categorías, clientes, proveedores y movimientos de inventario en una sola base de datos.
+- **Reducción de errores**: las validaciones del backend evitan datos duplicados o inválidos, y el cálculo de IVA se hace de forma automática y consistente.
+- **Conservación del historial**: al desactivar en lugar de borrar, y al anular en lugar de eliminar ventas o compras, no se pierde información previamente registrada.
+- **Control de procesos**: el kardex de inventario permite rastrear cada movimiento de stock (venta, compra, anulación o ajuste) y quién lo generó.
+- **Control de acceso**: el sistema de roles (ADMIN / CAJERO) delimita qué puede hacer cada tipo de usuario, dejando trazabilidad de quién registró cada venta.
+- **Facilidad de uso**: cuenta con una interfaz web para gestionar todo el flujo del punto de venta, incluyendo un comprobante imprimible para el cliente.
+- **Base lista para crecer**: su arquitectura (API + frontend separados) facilita agregar nuevos módulos en el futuro.
+
+---
+
+## Tecnologías utilizadas
+
+### Backend
+
+| Tecnología | Función en el proyecto |
+|---|---|
+| **Python** | Lenguaje principal del backend. |
+| **FastAPI** | Framework para construir la API REST. |
+| **Uvicorn** | Servidor que ejecuta la aplicación FastAPI. |
+| **SQLAlchemy** | ORM para modelar y manejar las tablas de la base de datos. |
+| **Psycopg** | Driver de conexión entre Python y PostgreSQL. |
+| **Pydantic** | Define y valida los datos que entran y salen de la API. |
+| **python-dotenv** | Carga la configuración desde el archivo `.env`. |
+| **PyJWT** | Genera y valida los tokens de sesión (autenticación). |
+| **bcrypt** | Genera el hash seguro de las contraseñas de los usuarios. |
+| **python-multipart** | Permite recibir formularios y archivos en la API (por ejemplo, fotos de perfil o del negocio). |
+
+### Frontend
+
+| Tecnología | Función en el proyecto |
+|---|---|
+| **React** | Librería para construir la interfaz de usuario. |
+| **Vite** | Herramienta de desarrollo y empaquetado del frontend. |
+
+### Base de datos
+
+| Tecnología | Función en el proyecto |
+|---|---|
+| **PostgreSQL** | Base de datos relacional donde se almacena toda la información del sistema (catálogo, ventas, compras, usuarios, kardex, etc.). |
+
+---
+
+## Arquitectura general
+
+El proyecto está dividido en dos partes que se comunican entre sí:
+
+- **Backend (API)**: expone rutas por módulo (`/productos`, `/categorias`, `/ventas`, `/compras`, `/clientes`, `/proveedores`, `/usuarios`, `/auth`, `/perfil`). Recibe peticiones, valida la información, aplica las reglas de negocio (por ejemplo, que no se venda más stock del disponible) y se comunica con la base de datos.
+- **Frontend (interfaz web)**: pantallas construidas en React desde donde el usuario interactúa con el sistema: login, venta en mostrador, compras, clientes, proveedores, usuarios y un componente de recibo imprimible. Se comunica con el backend mediante peticiones HTTP.
+- **Base de datos (PostgreSQL)**: almacena de forma persistente productos, categorías, ventas, compras, clientes, proveedores, usuarios y el kardex de movimientos de inventario.
+
+Adicionalmente:
+
+- Las peticiones a rutas protegidas requieren un **token de sesión (JWT)**, obtenido al iniciar sesión en `/auth/login`.
+- El esquema de la base de datos se administra mediante scripts SQL (`database/schema.sql` y migraciones), en lugar de dejar que el backend cree las tablas automáticamente.
+- Existe un **`Dockerfile`** para empaquetar el backend como contenedor, pensado para desplegarse en un servicio como Cloud Run.
+
+El flujo general es: el usuario interactúa con el **frontend** → el frontend envía peticiones (con su token, si aplica) a la **API** → la API valida, aplica las reglas de negocio y consulta o modifica la **base de datos** → la respuesta regresa al frontend, que la muestra al usuario.
+
+---
+
+## Escalabilidad
+
+### Actualmente implementado
+
+- Gestión completa de productos, categorías, clientes y proveedores.
+- Registro de ventas y compras como transacciones completas, con actualización de inventario.
+- Cálculo de IVA, comprobante de venta imprimible y kardex de movimientos.
+- Autenticación con roles (ADMIN / CAJERO) y gestión de usuarios.
+- `Dockerfile` listo para contenedorizar el backend.
+
+### Posible crecimiento futuro
+
+- **Nuevos usuarios**: el modelo de datos ya soporta varios usuarios por comercio con roles distintos, lo que facilita sumar más cajeros o administradores.
+- **Nuevos módulos**: por ejemplo, manejo de caja (apertura y cierre de turno; ya existe un campo preparado para esto pero aún no se usa), reportes o devoluciones.
+- **Nuevas funcionalidades**: facturación electrónica ante la DIAN (hoy solo existen campos como resolución y prefijo, pero no una integración real), pasarelas de pago, o notificaciones.
+- **Mayor cantidad de información**: al usar PostgreSQL, el sistema puede escalar el volumen de datos sin cambiar de tecnología.
+- **Versionado de la base de datos**: hoy se administra con scripts SQL manuales; podría formalizarse con una herramienta como Alembic.
+- **Despliegue en la nube**: ya existe un `Dockerfile` para el backend; falta automatizar el despliegue completo (backend, frontend y base de datos) en un proveedor como Cloud Run.
+- **Integraciones**: conexión con otras herramientas externas (contabilidad, pasarelas de pago, etc.) en etapas posteriores.
+
+> Los puntos de "posible crecimiento futuro" son proyecciones y **no representan funcionalidades ya implementadas**.
+
+---
+
+## Limitaciones
+
+- No existe una integración real de **facturación electrónica ante la DIAN**: solo hay campos preparados (prefijo de factura, resolución) para una futura integración.
+- El manejo de **caja** (apertura y cierre de turno) todavía no está implementado; existe un campo de referencia en las ventas, pero no se usa aún.
+- No incluye todavía versionado formal de base de datos (por ejemplo, Alembic); los cambios de esquema se administran con scripts SQL manuales.
+- No cuenta con reportes, tableros de indicadores ni funcionalidad de devoluciones.
+- No hay automatización de despliegue completo en la nube: existe un `Dockerfile` para el backend, pero falta una configuración lista para producción (frontend, base de datos, variables de entorno por entorno, etc.).
+- Al ser un proyecto académico, no ha sido probado a fondo en un entorno de producción real con múltiples usuarios simultáneos.
+
+---
+
+## Próximas mejoras
+
+- Integración real de **facturación electrónica** con la DIAN (hoy solo existen los campos base: resolución y prefijo de factura).
+- Implementación del **manejo de caja** (apertura, cierre y cuadre de turno).
+- Módulo de **reportes** (ventas por periodo, productos más vendidos, valorización de inventario, etc.).
+- Módulo de **devoluciones** de productos.
+- Integración de **Alembic** para el versionado de la base de datos.
+- Automatización del despliegue completo (backend, frontend y base de datos) en **Cloud Run** u otro proveedor.
+
+---
+
+## Instalación y ejecución
+
+### Requisitos previos
+
+- Python 3.11 o superior
+- Node.js 18 o superior
+- PostgreSQL instalado y funcionando
+- Git
+
+### 1. Clonar el repositorio
+
+```bash
+git clone https://github.com/Juan-Supelano/Punto360.git
+cd Punto360
+```
+
+### 2. Crear la base de datos y cargar el esquema
+
+1. En pgAdmin (o el gestor de PostgreSQL que uses), crea una base de datos llamada `cuadre_pos`.
+2. Carga la estructura de tablas ejecutando el script `database/schema.sql` sobre esa base de datos.
+
+### 3. Configurar las variables de entorno
+
+**Backend:**
+
+1. Copia `backend/.env.example` como `backend/.env`.
+2. Reemplaza `TU_CONTRASENA` por la contraseña de tu usuario de PostgreSQL.
+
+**Frontend:**
+
+1. Copia `frontend/.env.example` como `frontend/.env`.
+2. Por defecto apunta a `http://localhost:8000` (la API en local); solo debes cambiarlo si despliegas la API en otro lugar.
+
+### 4. Ejecutar el backend (API)
+
+En una terminal, dentro de la carpeta `backend`:
+
+```bash
 python -m venv .venv
-.venv\Scripts\activate
+.venv\Scripts\activate      # En Windows
+# source .venv/bin/activate  # En macOS/Linux
 pip install -r requirements.txt
-python seed.py
 uvicorn app.main:app --reload
 ```
 
-Queda corriendo en http://localhost:8000
-La documentación automática está en http://localhost:8000/docs
+La API quedará disponible en:
+- Servicio: `http://localhost:8000`
+- Documentación interactiva: `http://localhost:8000/docs`
 
-## 4. Encender el frontend
+### 5. Crear un usuario para iniciar sesión
 
-En **otra** terminal, dentro de `frontend`:
+Con el entorno virtual activado, dentro de `backend`:
 
-```powershell
+```bash
+python usuarios.py crear admin@cuadrepos.co "Nombre Apellido" MiClave123 ADMIN
+```
+
+También puedes listar los usuarios existentes con `python usuarios.py listar`.
+
+### 6. Ejecutar el frontend
+
+En **otra** terminal, dentro de la carpeta `frontend`:
+
+```bash
 npm install
 npm run dev
 ```
 
-Queda corriendo en http://localhost:5173
+La interfaz quedará disponible en `http://localhost:5173`. Inicia sesión con el usuario creado en el paso anterior.
 
-Las dos terminales se quedan abiertas mientras trabajas. Cada vez que guardes
-un archivo, se recargan solas.
+> Backend y frontend deben ejecutarse al mismo tiempo, cada uno en su propia terminal.
 
 ---
 
-## Qué hay hecho
+## Estado del proyecto
 
-- Entidades `categoria` y `producto`, relacionadas. CRUD completo en las dos.
-- Nada se borra: el botón "Desactivar" marca `activo = false`.
-- Validaciones: código de producto único, nombre de categoría único,
-  precio mayor que cero, la categoría debe existir.
+**En desarrollo.**
 
-## Qué sigue
-
-- Entidades `venta` y `venta_item` (la venta como una sola transacción).
-- Alembic para versionar los cambios de la base.
-- Dockerfile y despliegue en Cloud Run.
+Cuenta con un flujo funcional de punto de venta: catálogo, ventas, compras, inventario, clientes, proveedores y usuarios con autenticación. Aún no ha sido desplegado en un entorno de producción real ni probado con usuarios finales a gran escala.
