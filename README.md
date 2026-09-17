@@ -108,10 +108,176 @@ El proyecto está dividido en dos partes que se comunican entre sí:
 Adicionalmente:
 
 - Las peticiones a rutas protegidas requieren un **token de sesión (JWT)**, obtenido al iniciar sesión en `/auth/login`.
-- El esquema de la base de datos se administra mediante scripts SQL (`database/schema.sql` y migraciones), en lugar de dejar que el backend cree las tablas automáticamente.
+- La base de datos se administra con los scripts SQL de la carpeta `database/` (ver [Carpeta database](#carpeta-database)), en lugar de dejar que el backend cree las tablas automáticamente.
 - Existe un **`Dockerfile`** para empaquetar el backend como contenedor, pensado para desplegarse en un servicio como Cloud Run.
 
 El flujo general es: el usuario interactúa con el **frontend** → el frontend envía peticiones (con su token, si aplica) a la **API** → la API valida, aplica las reglas de negocio y consulta o modifica la **base de datos** → la respuesta regresa al frontend, que la muestra al usuario.
+
+### Carpeta database
+
+| Archivo | Contenido |
+|---|---|
+| `database/schema.sql` | Estructura de la base: las 12 tablas con sus llaves y restricciones. Se eliminó la versión anterior, que solo traía datos, y se reemplazó por esta con el mismo nombre. |
+| `database/seed.sql` | Datos de ejemplo: comercio, usuarios, catálogo, clientes, proveedores, compras, ventas y kardex. |
+| `database/diagram.png` | Diagrama entidad-relación de la base. |
+
+Los scripts de migración sueltos que estaban en `backend/` (`migracion_*.sql` y `datos_compras.sql`) se eliminaron por obsoletos.
+
+---
+
+## Endpoints
+
+Base local: `http://localhost:8000`. La documentación interactiva está en `/docs`.
+
+- **Autenticación**: salvo `/`, `/salud` y `POST /auth/login`, todas las rutas piden el encabezado `Authorization: Bearer <access_token>`.
+- **Contraseña temporal**: si un ADMIN reseteó la contraseña, el usuario recibe `403` en categorías, productos, proveedores, compras, clientes y ventas hasta cambiarla en `POST /perfil/cambiar-password`.
+- **Rol**: *Sesión* = cualquier usuario autenticado; *ADMIN* o *CAJERO* = solo ese rol.
+
+### Estado
+
+| Método | Ruta | Rol | Descripción |
+|---|---|---|---|
+| GET | `/` | Público | Nombre del servicio y estado |
+| GET | `/salud` | Público | Health check (Cloud Run) |
+
+### Autenticación — `/auth`
+
+| Método | Ruta | Rol | Descripción |
+|---|---|---|---|
+| POST | `/auth/login` | Público | Recibe `email` y `password`; devuelve `access_token`, `expira_en` (segundos) y el usuario |
+| GET | `/auth/yo` | Sesión | Usuario dueño del token |
+| GET | `/auth/comercio` | Sesión | Datos de la empresa |
+| PUT | `/auth/comercio` | ADMIN | Actualiza los datos de la empresa |
+
+### Perfil — `/perfil`
+
+| Método | Ruta | Rol | Descripción |
+|---|---|---|---|
+| GET | `/perfil/yo` | Sesión | Perfil propio |
+| PUT | `/perfil/yo` | Sesión | Cambia `nombre` y `foto_url` |
+| POST | `/perfil/cambiar-password` | Sesión | Recibe `password_actual` y `password_nueva` (mínimo 8 caracteres) |
+
+### Usuarios — `/usuarios`
+
+| Método | Ruta | Rol | Descripción |
+|---|---|---|---|
+| GET | `/usuarios` | ADMIN | Lista. Query: `buscar`, `incluir_inactivos` |
+| POST | `/usuarios` | ADMIN | Crea. Cuerpo: `email`, `nombre`, `password` (mínimo 8), `rol` |
+| PUT | `/usuarios/{id}` | ADMIN | Cambia `nombre`, `rol` o `activo`. Nadie puede quitarse su propio rol ADMIN |
+| DELETE | `/usuarios/{id}` | ADMIN | Desactiva. Nadie puede desactivar su propia cuenta |
+| POST | `/usuarios/{id}/reactivar` | ADMIN | Reactiva |
+| POST | `/usuarios/{id}/resetear-password` | ADMIN | Genera una contraseña temporal y la devuelve una sola vez |
+
+### Categorías — `/categorias`
+
+| Método | Ruta | Rol | Descripción |
+|---|---|---|---|
+| GET | `/categorias` | Sesión | Lista. Query: `incluir_inactivas` |
+| GET | `/categorias/{id}` | Sesión | Una categoría |
+| POST | `/categorias` | ADMIN | Crea. Cuerpo: `nombre`, `descripcion`, `prefijo_sku` (2 a 5 caracteres A-Z/0-9) |
+| PUT | `/categorias/{id}` | ADMIN | Actualiza `nombre`, `descripcion`, `prefijo_sku` o `activo` |
+| DELETE | `/categorias/{id}` | ADMIN | Desactiva. Devuelve `409` si tiene productos activos |
+| POST | `/categorias/{id}/reactivar` | ADMIN | Reactiva |
+
+### Productos — `/productos`
+
+| Método | Ruta | Rol | Descripción |
+|---|---|---|---|
+| GET | `/productos` | Sesión | Lista. Query: `categoria_id`, `buscar`, `solo_stock_bajo`, `incluir_inactivos` |
+| GET | `/productos/siguiente-sku?categoria_id=N` | Sesión | Vista previa del SKU que se asignaría (no lo reserva) |
+| GET | `/productos/{id}` | Sesión | Un producto |
+| POST | `/productos` | Sesión | Crea. El SKU lo genera el backend con el prefijo de la categoría (`BEB-001`, `BEB-002`…) |
+| PUT | `/productos/{id}` | Sesión | Actualiza los campos enviados |
+| PATCH | `/productos/{id}/stock?cantidad=N` | Sesión | Ajuste manual: `N` positivo suma, negativo resta. Queda en el kardex |
+| DELETE | `/productos/{id}` | Sesión | Desactiva |
+| POST | `/productos/{id}/reactivar` | Sesión | Reactiva |
+
+Unidades de medida válidas: `UND`, `KG`, `LT`, `MT`, `CAJA`, `PAQ`.
+
+### Clientes — `/clientes`
+
+| Método | Ruta | Rol | Descripción |
+|---|---|---|---|
+| GET | `/clientes` | Sesión | Lista. Query: `buscar` (nombre o documento), `incluir_inactivos` |
+| GET | `/clientes/{id}` | Sesión | Un cliente |
+| POST | `/clientes` | Sesión | Crea. Cuerpo: `tipo_doc` (`CC`, `NIT`, `CE`, `TI`, `PAS`), `num_doc`, `nombre`, `email`, `telefono`, `direccion` |
+| PUT | `/clientes/{id}` | Sesión | Actualiza `nombre`, `email`, `telefono`, `direccion` o `activo` |
+| DELETE | `/clientes/{id}` | Sesión | Desactiva |
+| POST | `/clientes/{id}/reactivar` | Sesión | Reactiva |
+
+### Proveedores — `/proveedores`
+
+| Método | Ruta | Rol | Descripción |
+|---|---|---|---|
+| GET | `/proveedores` | Sesión | Lista. Query: `buscar`, `incluir_inactivos` |
+| GET | `/proveedores/{id}` | Sesión | Un proveedor |
+| GET | `/proveedores/{id}/resumen` | Sesión | Número de compras, total comprado y fecha de la última compra |
+| POST | `/proveedores` | ADMIN | Crea. El NIT debe ser único |
+| PUT | `/proveedores/{id}` | ADMIN | Actualiza |
+| DELETE | `/proveedores/{id}` | ADMIN | Desactiva |
+| POST | `/proveedores/{id}/reactivar` | ADMIN | Reactiva |
+
+### Compras — `/compras`
+
+| Método | Ruta | Rol | Descripción |
+|---|---|---|---|
+| GET | `/compras` | Sesión | Lista. Query: `proveedor_id`, `estado` (`RECIBIDA`, `ANULADA`), `desde`, `hasta` |
+| GET | `/compras/{id}` | Sesión | Compra con sus ítems |
+| POST | `/compras` | ADMIN | Registra la compra en una transacción: suma stock y escribe el kardex |
+| POST | `/compras/{id}/anular` | ADMIN | Anula y devuelve el stock. Cuerpo opcional: `motivo` |
+
+Cuerpo de `POST /compras`:
+
+```json
+{
+  "proveedor_id": 1,
+  "numero_factura": "FV-1001",
+  "costo_incluye_iva": false,
+  "items": [{ "producto_id": 3, "cantidad": 10, "costo_unitario": 2500 }]
+}
+```
+
+### Ventas — `/ventas`
+
+| Método | Ruta | Rol | Descripción |
+|---|---|---|---|
+| GET | `/ventas` | Sesión | Lista. Query: `usuario_id`, `estado` (`PAGADA`, `ANULADA`), `desde`, `hasta`. El CAJERO solo ve sus ventas |
+| GET | `/ventas/resumen` | Sesión | Totales del periodo (`desde`, `hasta`). El CAJERO solo ve los suyos |
+| GET | `/ventas/por-cajero` | ADMIN | Total vendido por cada cajero (`desde`, `hasta`) |
+| GET | `/ventas/{id}` | Sesión | Venta con sus ítems. El CAJERO solo puede ver las suyas |
+| POST | `/ventas` | CAJERO | Registra la venta en una transacción: congela precios, descuenta stock y escribe el kardex |
+| POST | `/ventas/{id}/anular` | ADMIN | Anula y devuelve el stock. Cuerpo: `motivo` (3 a 200 caracteres) |
+
+Cuerpo de `POST /ventas` (los precios los pone el backend):
+
+```json
+{
+  "cliente_id": null,
+  "metodo_pago": "EFECTIVO",
+  "precio_incluye_iva": true,
+  "observaciones": null,
+  "items": [{ "producto_id": 3, "cantidad": 2 }]
+}
+```
+
+Métodos de pago: `EFECTIVO`, `TARJETA`, `TRANSFERENCIA`, `MIXTO`.
+
+### Archivos estáticos
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/static/...` | Archivos servidos desde `backend/static` (por ejemplo, fotos) |
+
+### Códigos de error
+
+| Código | Cuándo |
+|---|---|
+| 400 | Referencia inválida (categoría, proveedor o cliente inexistente o inactivo), unidad inválida, contraseña actual incorrecta, un ADMIN intentando desactivarse o quitarse el rol |
+| 401 | Falta el token, token inválido o vencido, credenciales incorrectas |
+| 403 | Rol sin permiso, usuario desactivado, contraseña temporal sin cambiar, venta de otro cajero |
+| 404 | Recurso no encontrado |
+| 409 | Dato repetido (nombre, prefijo, NIT, documento, correo), stock insuficiente, categoría con productos activos, venta o compra ya anulada |
+| 422 | Cuerpo o parámetros con formato inválido |
 
 ---
 
@@ -181,6 +347,7 @@ cd Punto360
 
 1. En pgAdmin (o el gestor de PostgreSQL que uses), crea una base de datos llamada `cuadre_pos`.
 2. Carga la estructura de tablas ejecutando el script `database/schema.sql` sobre esa base de datos.
+3. (Opcional) Ejecuta `database/seed.sql` para cargar datos de ejemplo.
 
 ### 3. Configurar las variables de entorno
 
