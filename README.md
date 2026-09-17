@@ -2,6 +2,32 @@
 
 Sistema de punto de venta (POS) para la gestión de productos, inventario, ventas, compras, clientes y proveedores, mediante una API REST y una interfaz web.
 
+![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-API%20REST-009688?logo=fastapi&logoColor=white)
+![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
+![Vite](https://img.shields.io/badge/Vite-6-646CFF?logo=vite&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Base%20de%20datos-4169E1?logo=postgresql&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-contenedores-2496ED?logo=docker&logoColor=white)
+![Estado](https://img.shields.io/badge/Estado-en%20desarrollo-yellow)
+
+---
+
+## Tabla de contenidos
+
+- [Descripción](#descripción)
+- [Funcionalidades](#funcionalidades)
+- [¿Por qué utilizar este proyecto?](#por-qué-utilizar-este-proyecto)
+- [Tecnologías utilizadas](#tecnologías-utilizadas)
+- [Arquitectura general](#arquitectura-general)
+- [Endpoints](#endpoints)
+- [Escalabilidad](#escalabilidad)
+- [Limitaciones](#limitaciones)
+- [Próximas mejoras](#próximas-mejoras)
+- [Instalación y ejecución](#instalación-y-ejecución)
+- [Despliegue en la nube (Google Cloud)](#despliegue-en-la-nube-google-cloud)
+- [Errores, complicaciones y soluciones](#errores-complicaciones-y-soluciones)
+- [Estado del proyecto](#estado-del-proyecto)
+
 ---
 
 ## Descripción
@@ -95,6 +121,19 @@ Cuadre POS es un sistema pensado para llevar el control completo del punto de ve
 |---|---|
 | **PostgreSQL** | Base de datos relacional donde se almacena toda la información del sistema (catálogo, ventas, compras, usuarios, kardex, etc.). |
 
+### Infraestructura y despliegue
+
+| Tecnología | Función en el proyecto |
+|---|---|
+| **Docker** | Empaqueta el backend (`backend/Dockerfile`) y el frontend (imagen con Nginx sirviendo el build de Vite) como contenedores. |
+| **Google Cloud Run** | Ejecuta los contenedores del backend y del frontend como servicios administrados, sin gestionar servidores. |
+| **Google Cloud SQL** | Aloja la instancia de PostgreSQL usada en el despliegue de prueba. |
+| **Google Artifact Registry** | Almacena las imágenes Docker generadas para el backend y el frontend. |
+| **Google Cloud Build** | Construye las imágenes Docker a partir del código fuente y las publica en Artifact Registry. |
+| **Google Secret Manager** | Guarda de forma segura credenciales sensibles (`DATABASE_URL`, `JWT_SECRETO`) usadas por el backend en Cloud Run. |
+
+> Ver la sección [Despliegue en la nube (Google Cloud)](#despliegue-en-la-nube-google-cloud) para el detalle de cómo se usó cada uno de estos servicios.
+
 ---
 
 ## Arquitectura general
@@ -113,6 +152,36 @@ Adicionalmente:
 
 El flujo general es: el usuario interactúa con el **frontend** → el frontend envía peticiones (con su token, si aplica) a la **API** → la API valida, aplica las reglas de negocio y consulta o modifica la **base de datos** → la respuesta regresa al frontend, que la muestra al usuario.
 
+### Diagrama de componentes
+
+El siguiente diagrama distingue los tres componentes del sistema (frontend, backend y base de datos) y dónde se ejecuta cada uno: en **desarrollo local** (equipo del desarrollador) o en el **despliegue de prueba en la nube** (Google Cloud), documentado en la sección [Despliegue en la nube](#despliegue-en-la-nube-google-cloud).
+
+```mermaid
+flowchart TB
+    subgraph LOCAL["💻 Desarrollo local"]
+        direction TB
+        FL["Frontend (React + Vite)\nhttp://localhost:5173"]
+        BL["Backend (FastAPI + Uvicorn)\nhttp://localhost:8000"]
+        DL[("PostgreSQL local\ncuadre_pos")]
+        FL -- "HTTP + JWT" --> BL
+        BL -- "SQL (SQLAlchemy/Psycopg)" --> DL
+    end
+
+    subgraph CLOUD["☁️ Google Cloud (despliegue de prueba)"]
+        direction TB
+        FC["Frontend\nCloud Run (Nginx + build de Vite)"]
+        BC["Backend\nCloud Run (FastAPI + Uvicorn)"]
+        DC[("Cloud SQL\nPostgreSQL")]
+        SM["Secret Manager\nDATABASE_URL / JWT_SECRETO"]
+        FC -- "HTTP + JWT" --> BC
+        BC -- "Conexión Cloud SQL" --> DC
+        SM -. "credenciales" .-> BC
+    end
+
+    U(["Usuario"]) --> FL
+    U --> FC
+```
+
 ### Carpeta database
 
 | Archivo | Contenido |
@@ -120,6 +189,8 @@ El flujo general es: el usuario interactúa con el **frontend** → el frontend 
 | `database/schema.sql` | Estructura de la base: las 12 tablas con sus llaves y restricciones. Se eliminó la versión anterior, que solo traía datos, y se reemplazó por esta con el mismo nombre. |
 | `database/seed.sql` | Datos de ejemplo: comercio, usuarios, catálogo, clientes, proveedores, compras, ventas y kardex. |
 | `database/diagram.png` | Diagrama entidad-relación de la base. |
+
+![Diagrama entidad-relación de la base de datos](database/diagram.png)
 
 Los scripts de migración sueltos que estaban en `backend/` (`migracion_*.sql` y `datos_compras.sql`) se eliminaron por obsoletos.
 
@@ -314,6 +385,8 @@ Métodos de pago: `EFECTIVO`, `TARJETA`, `TRANSFERENCIA`, `MIXTO`.
 - No hay automatización de despliegue completo en la nube: existe un `Dockerfile` para el backend, pero falta una configuración lista para producción (frontend, base de datos, variables de entorno por entorno, etc.).
 - Al ser un proyecto académico, no ha sido probado a fondo en un entorno de producción real con múltiples usuarios simultáneos.
 
+> **Nota:** desde la redacción de estos puntos se realizó un despliegue de prueba manual en Google Cloud (backend, frontend y base de datos), documentado en [Despliegue en la nube (Google Cloud)](#despliegue-en-la-nube-google-cloud). Ese despliegue se hizo ejecutando comandos `gcloud` manualmente; sigue pendiente automatizarlo (por ejemplo, con un pipeline de CI/CD), por lo que esta limitación sigue vigente en ese sentido.
+
 ---
 
 ## Próximas mejoras
@@ -402,8 +475,51 @@ La interfaz quedará disponible en `http://localhost:5173`. Inicia sesión con e
 
 ---
 
+## Despliegue en la nube (Google Cloud)
+
+> Este despliegue se realizó como **prueba manual** (comandos `gcloud` ejecutados a mano), no como un pipeline automatizado. Complementa, no reemplaza, la guía de [Instalación y ejecución](#instalación-y-ejecución) en local.
+
+### Dónde vive cada componente
+
+| Componente | En desarrollo local | En el despliegue de prueba (nube) |
+|---|---|---|
+| **Frontend** | `npm run dev` en `http://localhost:5173` | Contenedor (Nginx + build de Vite) en **Cloud Run** |
+| **Backend** | `uvicorn` en `http://localhost:8000` | Contenedor (FastAPI + Uvicorn) en **Cloud Run** |
+| **Base de datos** | PostgreSQL local (`cuadre_pos`) | Instancia de **Cloud SQL** (PostgreSQL) |
+| **Credenciales** | Archivo `.env` local | **Secret Manager** (`DATABASE_URL`, `JWT_SECRETO`) |
+
+### Resumen del procedimiento seguido
+
+1. **Base de datos**: en la instancia de Cloud SQL se creó un usuario de aplicación (`app_pos`) con permisos limitados (`CONNECT`, `USAGE` y `SELECT/INSERT/UPDATE/DELETE` sobre las tablas), en lugar de usar el usuario `postgres` (superusuario) para que se conecte el backend.
+2. **Secretos**: la cadena de conexión (`DATABASE_URL`) y la clave de firma de JWT (`JWT_SECRETO`) se guardaron en **Secret Manager**, en vez de dejarlas en variables de entorno planas.
+3. **Permisos (IAM)**: se le dio a la cuenta de servicio que usa Cloud Run el rol `roles/secretmanager.secretAccessor` (para leer los secretos) y `roles/cloudsql.client` (para conectarse a Cloud SQL).
+4. **Imágenes Docker**: se creó un repositorio en **Artifact Registry** (`cuadre-pos`) y se construyeron las imágenes del backend y del frontend con **Cloud Build** (`gcloud builds submit`), publicándolas en ese repositorio.
+5. **Backend en Cloud Run**: se desplegó el contenedor del backend con `gcloud run deploy`, inyectando los secretos como variables de entorno (`--set-secrets`) y la conexión a Cloud SQL (`--add-cloudsql-instances`).
+6. **Frontend en Cloud Run**: antes de construir la imagen del frontend, se generó un `.env.production` con `VITE_API_URL` apuntando a la URL pública del backend recién desplegado; luego se construyó la imagen (Nginx sirviendo el build de Vite) y se desplegó igual que el backend.
+7. **CORS**: se actualizó la variable `CORS_ORIGENES` del backend con la URL real del frontend ya desplegado (ver detalle en la siguiente sección).
+
+> Las URLs de Cloud Run generadas automáticamente (`https://<servicio>-<hash>.<region>.run.app`) son válidas para pruebas, pero no corresponden a un dominio propio del proyecto.
+
+---
+
+## Errores, complicaciones y soluciones
+
+Incidencias reales encontradas durante el desarrollo y el despliegue de prueba, junto con la causa identificada y la solución aplicada.
+
+| Problema / error | Causa o contexto | Solución aplicada / procedimiento recomendado |
+|---|---|---|
+| **Error de CORS** al iniciar sesión desde el frontend desplegado: *"Access to fetch at '.../auth/login' ... has been blocked by CORS policy: ... No 'Access-Control-Allow-Origin' header is present"* | La variable de entorno `CORS_ORIGENES` del backend (ver `app/config.py`) todavía apuntaba a `http://localhost:5173` y no incluía la URL real del frontend ya desplegado en Cloud Run. | Actualizar la variable de entorno del servicio del backend con la URL del frontend desplegado y volver a desplegar: `gcloud run services update cuadre-pos-api --update-env-vars "CORS_ORIGENES=<url-del-frontend>"`. |
+| El frontend mostraba **"No se pudo conectar con la API. ¿Está corriendo uvicorn?"** al intentar iniciar sesión en la versión desplegada. | El build del frontend se generó con `VITE_API_URL` apuntando a una URL incorrecta o antes de que el backend estuviera disponible; al ser una variable de Vite, queda fija en el build y no se puede cambiar después sin reconstruir la imagen. | Generar `frontend/.env.production` con `VITE_API_URL` apuntando a la URL pública real del backend (obtenida con `gcloud run services describe`) **antes** de correr `npm run build` / construir la imagen Docker del frontend. |
+| Respuesta `{"detail": "Falta el token de sesión"}` al llamar a un endpoint protegido. | Se hizo la petición a una ruta que requiere sesión (todas salvo `/`, `/salud` y `POST /auth/login`) sin enviar el encabezado `Authorization: Bearer <access_token>`. | Iniciar sesión primero en `POST /auth/login`, guardar el `access_token` recibido y enviarlo en el encabezado `Authorization` de las siguientes peticiones. |
+| `ModuleNotFoundError: No module named 'sqlalchemy'` al ejecutar un script como `python inspeccionar_bd.py`. | El intérprete de Python usado para correr el script no era el del entorno virtual del proyecto (entorno virtual no activado, o se ejecutó desde fuera de `backend/`). | Activar el entorno virtual (`.venv\Scripts\activate` en Windows) e instalar las dependencias (`pip install -r requirements.txt`) antes de ejecutar cualquier script del backend. |
+| La instancia de **Cloud SQL** quedaba corriendo (`RUNNABLE`, política `ALWAYS`) fuera de las sesiones de trabajo, generando costo aunque no se estuviera usando. | Por defecto, una instancia de Cloud SQL permanece siempre encendida una vez creada. | Pausarla cuando no se está usando con `gcloud sql instances patch <instancia> --activation-policy NEVER`, y volver a activarla (`--activation-policy ALWAYS`) antes de retomar el trabajo o hacer una demo. |
+
+> Si aparece un nuevo error durante el desarrollo o el despliegue, se recomienda documentarlo en esta misma tabla (problema, causa y solución) para mantener un historial útil para el equipo.
+
+---
+
 ## Estado del proyecto
 
 **En desarrollo.**
 
-Cuenta con un flujo funcional de punto de venta: catálogo, ventas, compras, inventario, clientes, proveedores y usuarios con autenticación. Aún no ha sido desplegado en un entorno de producción real ni probado con usuarios finales a gran escala.
+Cuenta con un flujo funcional de punto de venta: catálogo, ventas, compras, inventario, clientes, proveedores y usuarios con autenticación. Aún no ha sido desplegado en un entorno de producción real ni probado con usuarios finales a gran escala. Sí se realizó, como se describe en [Despliegue en la nube (Google Cloud)](#despliegue-en-la-nube-google-cloud), un despliegue manual de prueba en Google Cloud (Cloud Run, Cloud SQL, Secret Manager) para validar que el sistema puede ejecutarse fuera del entorno local.
