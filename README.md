@@ -16,6 +16,7 @@ Sistema de punto de venta (POS) para la gestión de productos, inventario, venta
 
 - [Descripción](#descripción)
 - [Funcionalidades](#funcionalidades)
+- [Capturas de Pantallas del Funcionamiento](#capturas-de-pantallas-del-funcionamiento)
 - [¿Por qué utilizar este proyecto?](#por-qué-utilizar-este-proyecto)
 - [Tecnologías utilizadas](#tecnologías-utilizadas)
 - [Arquitectura general](#arquitectura-general)
@@ -76,6 +77,102 @@ Cuadre POS es un sistema pensado para llevar el control completo del punto de ve
 | **Autenticación y roles de usuario** | Inicio de sesión con usuario y contraseña (token JWT). Existen dos roles: **ADMIN** (gestiona el negocio, usuarios y compras) y **CAJERO** (solo puede registrar ventas). |
 | **Gestión de usuarios** | El ADMIN puede crear, editar, desactivar y resetear la contraseña de otros usuarios del sistema. |
 | **Perfil y datos del comercio** | Cada usuario puede editar su propio perfil (nombre, foto), y el ADMIN puede configurar los datos del negocio (razón social, NIT, logo, resolución) que aparecen en el comprobante de venta. |
+
+---
+
+## Capturas de Pantallas del Funcionamiento
+
+A continuación se muestra un recorrido real por la interfaz, siguiendo el flujo típico de uso del sistema: primero la configuración del catálogo (proveedores, categorías y productos), luego el registro de una compra para abastecer inventario, y finalmente una venta completa desde el rol **CAJERO**, incluyendo el comprobante y su historial.
+
+### Configuración del catálogo (rol ADMIN)
+
+**1. Proveedores**
+
+![Listado de proveedores](docs/screenshots/01-proveedores-listado.png)
+
+Módulo *Proveedores*: lista a quién se le compra la mercancía, con su NIT, contacto, teléfono y correo. Permite buscar, dar de alta un nuevo proveedor y desactivar los que ya no se usan (sin borrarlos, conservando el historial de compras asociado).
+
+**2. Categorías**
+
+![Alta y listado de categorías](docs/screenshots/02-categorias-alta-listado.png)
+
+Módulo *Categorías*: cada categoría define el prefijo con el que se numeran automáticamente los SKU de sus productos (por ejemplo, `DLI` para "Dulces Importados" genera códigos `DLI-001`, `DLI-002`, ...). El formulario superior crea una nueva categoría y la tabla inferior lista las existentes con su cantidad de productos activos.
+
+**3. Productos**
+
+![Listado de productos e inventario](docs/screenshots/03-productos-listado-inventario.png)
+
+Módulo *Productos*: catálogo e inventario del punto de venta. Muestra tarjetas resumen (productos listados, con stock bajo y valor total del inventario al costo) y una tabla con SKU, precio, costo, margen y stock de cada producto, con filtros por categoría y por stock bajo.
+
+**4. Creación de un nuevo producto (SKU `DLI-001`)**
+
+![Formulario de nuevo producto 1](docs/screenshots/04-nuevo-producto-formulario-1.png)
+
+Formulario modal *Nuevo producto*: al elegir la categoría "Dulces Importados", el SKU se genera automáticamente (`DLI-001`). Se cargan nombre, descripción, precio de venta, costo, IVA, stock actual, stock mínimo y unidad de medida.
+
+**5. Creación de un segundo producto (SKU `DLI-002`)**
+
+![Formulario de nuevo producto 2](docs/screenshots/05-nuevo-producto-formulario-2.png)
+
+Mismo formulario, registrando un segundo producto de la misma categoría; el sistema asigna el siguiente consecutivo del prefijo (`DLI-002`) automáticamente, evitando SKU duplicados.
+
+### Compras e inventario (rol ADMIN)
+
+**6. Registro de una compra**
+
+![Registrar compra](docs/screenshots/06-registrar-compra.png)
+
+Formulario modal *Registrar compra*: se elige el proveedor y el número de factura, se marca si los costos ya incluyen IVA, y se agregan las líneas de productos comprados (cantidad y costo unitario). El sistema calcula subtotal, IVA y total, y al guardar suma el stock de cada producto.
+
+**7. Historial de compras**
+
+![Listado de compras](docs/screenshots/07-compras-listado.png)
+
+Módulo *Compras*: historial de todas las compras registradas, con totales agregados (compras recibidas, total comprado y compras anuladas), filtros por proveedor/estado, y la opción de ver el detalle o anular cada factura (lo que revierte el stock sumado).
+
+### Venta en el punto de venta (rol CAJERO)
+
+**8. Pantalla de venta (inicio)**
+
+![Pantalla inicial de venta](docs/screenshots/08-vender-pantalla-inicial-cajero.png)
+
+Módulo *Vender*, ya autenticado con un usuario de rol **CAJERO** (menú reducido: solo Vender, Mis ventas, Productos, Categorías, Proveedores, Compras, Clientes, Mi perfil). El cajero busca productos por nombre o SKU para ir armando la venta; a la derecha se configuran el cliente, el método de pago y si los precios ya incluyen IVA.
+
+**9. Clientes**
+
+![Listado de clientes](docs/screenshots/09-clientes-listado.png)
+
+Módulo *Clientes*: lista a quién se le vende, con tipo y número de documento, teléfono, correo y dirección. Incluye el cliente genérico "Consumidor final" para ventas sin datos del comprador, y permite buscar, editar o desactivar clientes.
+
+**10. Registro de un nuevo cliente**
+
+![Formulario de nuevo cliente](docs/screenshots/10-nuevo-cliente-formulario.png)
+
+Formulario modal *Nuevo cliente*: captura tipo y número de documento, nombre, teléfono, correo y dirección, para asociarlo luego a sus compras.
+
+**11. Venta en progreso**
+
+![Carrito de venta en progreso](docs/screenshots/11-vender-carrito-en-progreso.png)
+
+El cajero agregó varios productos al carrito (con su cantidad y subtotal), seleccionó al cliente recién creado, el método de pago "EFECTIVO" y el monto recibido; el sistema calcula subtotal, IVA, total y el cambio a devolver antes de confirmar el cobro.
+
+**12. Venta registrada**
+
+![Comprobante de venta registrada](docs/screenshots/12-venta-registrada-comprobante.png)
+
+Al confirmar el cobro, se genera el comprobante de venta (`F-000003`) con el detalle de productos, subtotal, IVA, total y cambio, junto con las opciones de imprimirlo o iniciar una nueva venta.
+
+**13. Vista previa de impresión**
+
+![Vista previa de impresión del comprobante](docs/screenshots/13-vista-previa-impresion-comprobante.png)
+
+El comprobante está formateado para impresora térmica (ticket angosto), con los datos del comercio (razón social, NIT, dirección), el detalle de la venta, el desglose de IVA y la leyenda de que el documento no es válido como factura electrónica.
+
+**14. Historial de ventas del cajero**
+
+![Historial de ventas del cajero](docs/screenshots/14-mis-ventas-historial-cajero.png)
+
+Módulo *Mis ventas*: cada cajero ve únicamente las ventas que él mismo registró, con totales resumidos (ventas pagadas, total vendido, ticket promedio y anuladas), y puede consultar o reimprimir cualquier comprobante.
 
 ---
 
